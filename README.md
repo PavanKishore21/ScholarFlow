@@ -1,4 +1,4 @@
-# ScholarFlow 🧠
+# ScholarFlow 
 
 ScholarFlow is an **autonomous research workspace** built on top of a Retrieval-Augmented Generation (RAG) stack.
 
@@ -14,7 +14,7 @@ The UI is built with **Streamlit**, the backend with **FastAPI + LangGraph**, an
 
 ## Features
 
-### 🧠 Research Agent
+### Research Agent
 
 - Chat-like research interface
 - Multi-step agent pipeline:
@@ -29,7 +29,7 @@ The UI is built with **Streamlit**, the backend with **FastAPI + LangGraph**, an
 
 ---
 
-### 📂 Knowledge Base
+### Knowledge Base
 
 - Upload **PDF documents**
 - Text is parsed and:
@@ -40,7 +40,7 @@ The UI is built with **Streamlit**, the backend with **FastAPI + LangGraph**, an
 
 ---
 
-### ⚙️ Admin Dashboard
+### Admin Dashboard
 
 - View **migration status** of the vector store
 - Trigger **vector DB reset** via the `/admin/clear_vector_db` endpoint
