@@ -758,19 +758,7 @@ if st.session_state.page_mode == "Research Agent":
 
         if not messages:
             # Empty state hero
-            st.markdown(
-                """
-                <div class="hero-container">
-                    <div class="hero-title">GraphScholar</div>
-                    <div class="hero-subtitle">
-                        Your AI research assistant for retrieval-augmented generation.
-                        It plans queries, retrieves from your vector database, and synthesizes
-                        literature-style answers grounded in real sources.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            
 
             st.markdown("### Quick RAG prompts")
 
