@@ -14,7 +14,11 @@ from src.logger import get_logger
 
 log = get_logger("Main")
 
-api = FastAPI()
+# ----------------------------------------------------------
+# FastAPI app (this is what Render will load as main:api)
+# ----------------------------------------------------------
+api = FastAPI(title="ScholarFlow API")
+
 ingestor = IngestService()
 migration_service = MigrationService()
 
@@ -28,6 +32,12 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
+# ----------------------------------------------------------
+# Health check (for debugging Render)
+# ----------------------------------------------------------
+@api.get("/health")
+def healthcheck():
+    return {"status": "ok"}
 
 # ----------------------------------------------------------
 # Startup — run migration in background
@@ -35,8 +45,10 @@ api.add_middleware(
 @api.on_event("startup")
 async def startup_event():
     log.info("🚀 FastAPI startup: launching background migration worker")
-    migration_service.start_background_migration()
-
+    try:
+        migration_service.start_background_migration()
+    except Exception as e:
+        log.exception(f"Failed to start migration worker: {e}")
 
 # ----------------------------------------------------------
 # Request / response models
@@ -55,7 +67,6 @@ def _compute_token_count(text_or_list: Union[str, List[str], None]) -> int:
         return sum(len(str(t).split()) for t in text_or_list)
     return 0
 
-
 # ----------------------------------------------------------
 # Main research endpoint
 # ----------------------------------------------------------
@@ -67,7 +78,7 @@ def generate_review(req: Request):
     - critique    : self-critique
     - queries     : search plan
     - stats       : simple token stats for LLM vs retrieved text
-    - citations   : list of {title, url, snippet} used to build clickable refs
+    - citations   : list of {title, url, snippet} for clickable refs
     """
     init_state: Dict[str, Any] = {"task": req.topic, "revision_count": 0}
     result: Dict[str, Any] = agent_app.invoke(init_state)
@@ -76,8 +87,7 @@ def generate_review(req: Request):
     critique = result.get("critique", "") or ""
     plan = result.get("plan", []) or []
 
-    # --- retrieved context, if your workflow exposes it ---
-    # Adjust these keys to match your workflow structure.
+    # retrieved context, if your workflow exposes it
     retrieved_context = (
         result.get("retrieved_context")
         or result.get("context")
@@ -87,7 +97,7 @@ def generate_review(req: Request):
     llm_tokens = _compute_token_count(draft)
     retrieved_tokens = _compute_token_count(retrieved_context)
 
-    # --- citations / references ---
+    # citations / references (best-effort normalization)
     raw_citations = (
         result.get("citations")
         or result.get("sources")
@@ -115,10 +125,7 @@ def generate_review(req: Request):
                 }
             )
         else:
-            # string fallback
-            citations.append(
-                {"title": str(c), "url": "", "snippet": ""}
-            )
+            citations.append({"title": str(c), "url": "", "snippet": ""})
 
     return {
         "review": draft,
@@ -130,7 +137,6 @@ def generate_review(req: Request):
         },
         "citations": citations,
     }
-
 
 # ----------------------------------------------------------
 # Upload PDF — basic ingestion
@@ -160,7 +166,6 @@ async def upload_pdf(file: UploadFile = File(...)):
         "paper_id": paper_id,
     }
 
-
 # ----------------------------------------------------------
 # Admin — clear vector DB
 # ----------------------------------------------------------
@@ -175,7 +180,6 @@ def clear_vector_db():
 
     return {"status": "cleared"}
 
-
 # ----------------------------------------------------------
 # Admin — migration status
 # ----------------------------------------------------------
@@ -186,10 +190,8 @@ def migration_status():
         "finished": migration_service.finished,
         "migrated": migration_service.migrated,
         "errors": migration_service.errors,
-        # simple uptime string if your MigrationService exposes it, else N/A
         "uptime": getattr(migration_service, "uptime", "N/A"),
     }
-
 
 # ----------------------------------------------------------
 # Admin — restart migration
@@ -199,43 +201,29 @@ def restart_migration():
     migration_service.start_background_migration()
     return {"status": "restarted"}
 
-
 # ----------------------------------------------------------
-# Admin — corpus stats for Knowledge Base sidebar
+# Admin — corpus stats for Knowledge Base
 # ----------------------------------------------------------
 @api.get("/admin/stats")
 def corpus_stats():
     """
     Returns simple stats used by the Knowledge Base view.
-    If your IngestService exposes better stats, wire them here.
     """
-    try:
-        # Example if you later add a proper method:
-        # stats = ingestor.get_stats()
-        # return stats
-        pass
-    except Exception:
-        # fall through to default
-        ...
-
     return {
         "documents": getattr(ingestor, "documents_count", 0),
         "passages": getattr(ingestor, "passages_count", 0),
         "embeddings": getattr(ingestor, "embeddings_count", 0),
     }
 
-
 # ----------------------------------------------------------
-# Admin — recent logs (simple stub)
+# Admin — recent logs
 # ----------------------------------------------------------
 @api.get("/admin/logs")
 def admin_logs():
     """
     Return recent activity logs for the Admin screen.
-    If MigrationService tracks logs, expose them here.
     """
     logs = getattr(migration_service, "logs", [])
-    # Expect each log to be {timestamp, level, message}. If not, fall back.
     normalized: List[Dict[str, str]] = []
     for entry in logs:
         if isinstance(entry, dict):
@@ -248,28 +236,7 @@ def admin_logs():
             )
         else:
             normalized.append(
-                {
-                    "timestamp": "",
-                    "level": "info",
-                    "message": str(entry),
-                }
+                {"timestamp": "", "level": "info", "message": str(entry)}
             )
 
     return {"logs": normalized}
-
-
-# ----------------------------------------------------------
-# Admin — system info
-# ----------------------------------------------------------
-@api.get("/admin/system_info")
-def system_info():
-    return {
-        "version": "0.1.0",
-        "vector_db": getattr(getattr(ingestor, "vs", None), "name", "Qdrant"),
-        "embedding_model": getattr(
-            ingestor, "embedding_model_name", "Unknown"
-        ),
-    }
-
-
-
