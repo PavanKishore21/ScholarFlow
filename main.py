@@ -36,6 +36,11 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
+
+@api.get("/")
+def root():
+    return {"status": "ok", "service": "scholarflow-api"}
+
 # ----------------------------------------------------------
 # Health check - now reports startup status
 # ----------------------------------------------------------
