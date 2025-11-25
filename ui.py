@@ -3,6 +3,11 @@ import requests
 import time
 
 # ----------------------------------------------------------
+# BACKEND CONFIG
+# ----------------------------------------------------------
+BACKEND_URL = "https://scholarflow.onrender.com"
+
+# ----------------------------------------------------------
 # 1. PAGE CONFIG
 # ----------------------------------------------------------
 st.set_page_config(
@@ -62,13 +67,11 @@ st.markdown(
         max-width: 1600px;
     }
 
-    /* Hide Streamlit branding but keep toolbar (for sidebar toggle) */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stDecoration"] {display: none;}
     header {background-color: transparent !important;}
 
-    /* Scrollbar */
     ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
@@ -147,7 +150,7 @@ st.markdown(
         margin: 1.5rem 0;
     }
 
-    /* Base button styling (for all Streamlit buttons) */
+    /* Base button styling */
     .stButton > button {
         width: 100%;
         border-radius: 10px;
@@ -161,7 +164,6 @@ st.markdown(
         box-shadow: none;
     }
 
-    /* Primary CTA buttons (wrapped in .primary-action) */
     .primary-action button {
         width: 100%;
         border-radius: 14px !important;
@@ -181,46 +183,6 @@ st.markdown(
         box-shadow: var(--shadow-lg), var(--shadow-glow);
     }
 
-    /* Conversation history items (recent conversations) */
-    .sidebar-btn button {
-        width: 100%;
-        border-radius: 12px !important;
-        border: 1px solid var(--border-subtle) !important;
-        background: #020617 !important;
-        color: var(--text-primary) !important;
-        font-size: 0.9rem !important;
-        text-align: left !important;
-        padding: 0.75rem 0.95rem !important;
-        transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease !important;
-        font-weight: 500 !important;
-        box-shadow: none !important;
-        opacity: 0.95;
-    }
-
-    .sidebar-btn button:hover {
-        background: var(--bg-card-hover) !important;
-        border-color: var(--accent-secondary) !important;
-        color: var(--text-primary) !important;
-        transform: translateY(-1px);
-        opacity: 1;
-    }
-
-
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-lg), var(--shadow-glow);
-    }
-
-    .history-header {
-        color: var(--text-tertiary);
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        margin: 1.5rem 0 0.8rem 0.3rem;
-    }
-
-    /* FINAL OVERRIDE: Recent conversation buttons */
     .sidebar-btn button {
         all: unset;
         display: block;
@@ -244,8 +206,14 @@ st.markdown(
         transform: translateY(-1px);
     }
 
-
-
+    .history-header {
+        color: var(--text-tertiary);
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin: 1.5rem 0 0.8rem 0.3rem;
+    }
 
     /* ========== MAIN CONTENT ========== */
     .section-title {
@@ -265,32 +233,6 @@ st.markdown(
         line-height: 1.5;
     }
 
-    .hero-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 4rem 2rem;
-        text-align: center;
-    }
-
-    .hero-title {
-        font-size: 3.5rem;
-        font-weight: 800;
-        margin-bottom: 1rem;
-        background: var(--accent-gradient);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: -0.04em;
-    }
-
-    .hero-subtitle {
-        color: var(--text-secondary);
-        font-size: 1.1rem;
-        max-width: 600px;
-        line-height: 1.6;
-    }
-
     .stChatMessage {
         background-color: transparent !important;
         padding: 1.5rem 0 !important;
@@ -307,11 +249,6 @@ st.markdown(
     [data-testid="stChatMessageContent"] p {
         margin-bottom: 0.8rem;
         line-height: 1.7;
-    }
-
-    [data-testid="stChatMessage"][data-testid*="user"] [data-testid="stChatMessageContent"] {
-        background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-card) 100%);
-        border-color: var(--border-medium);
     }
 
     .stChatInput {
@@ -440,17 +377,6 @@ st.markdown(
         overflow: hidden;
     }
 
-    .upload-area::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: radial-gradient(circle at center, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
-        pointer-events: none;
-    }
-
     .upload-area:hover {
         border-color: var(--accent-secondary);
         background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-card) 100%);
@@ -561,10 +487,6 @@ st.markdown(
             font-size: 1.5rem;
         }
 
-        .hero-title {
-            font-size: 2.5rem;
-        }
-
         .meta-card {
             padding: 1rem;
         }
@@ -608,10 +530,10 @@ def handle_user_query(prompt: str):
 
     try:
         with st.spinner(
-            "🤖 Research agents at work: Planning → Retrieving → Synthesizing..."
+            "Research agents at work: planning, retrieving, and synthesizing..."
         ):
             response = requests.post(
-                "http://localhost:8000/generate",
+                f"{BACKEND_URL}/generate",
                 json={"topic": prompt},
                 timeout=180,
             )
@@ -642,7 +564,6 @@ def handle_user_query(prompt: str):
                 }
             )
 
-            # Save or update conversation
             active_conv = get_active_conversation()
             if active_conv is None:
                 new_id = (
@@ -666,14 +587,15 @@ def handle_user_query(prompt: str):
         st.session_state.working_messages.append(
             {
                 "role": "assistant",
-                "content": "⏱️ Request timed out. The query may be too complex. Please try a more specific question.",
+                "content": "⏱️ Request timed out. The query may be too complex. Please try again.",
             }
         )
     except requests.exceptions.ConnectionError:
         st.session_state.working_messages.append(
             {
                 "role": "assistant",
-                "content": "🔌 Cannot connect to backend server. Please ensure the API is running on http://localhost:8000",
+                "content": f"🔌 Cannot connect to backend server. "
+                           f"Please ensure the API is reachable at {BACKEND_URL}",
             }
         )
     except Exception as e:
@@ -703,19 +625,21 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Primary CTA with gradient
     st.markdown("<div class='primary-action'>", unsafe_allow_html=True)
-    if st.button("✨ New conversation", use_container_width=True, key="new_conversation"):
+    if st.button("New conversation", use_container_width=True, key="new_conversation"):
         st.session_state.active_chat_id = None
         st.session_state.working_messages = []
         st.session_state.page_mode = "Research Agent"
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="history-header">RECENT CONVERSATIONS</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="history-header">RECENT CONVERSATIONS</div>',
+        unsafe_allow_html=True,
+    )
 
     if not st.session_state.conversations:
-        st.caption("No conversations yet. Start one to begin!")
+        st.caption("No conversations yet. Start one to begin.")
     else:
         for conv in reversed(st.session_state.conversations):
             label = conv["title"][:32] + ("…" if len(conv["title"]) > 32 else "")
@@ -723,15 +647,12 @@ with st.sidebar:
 
             with st.container():
                 st.markdown("<div class='sidebar-btn'>", unsafe_allow_html=True)
-                # NOTE: no emoji here
                 if st.button(label, key=key, use_container_width=True):
                     st.session_state.active_chat_id = conv["id"]
                     st.session_state.working_messages = conv["messages"]
                     st.session_state.page_mode = "Research Agent"
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
-
-
 
 # ----------------------------------------------------------
 # 5. MAIN CONTENT
@@ -742,31 +663,27 @@ with st.sidebar:
 # ==========================================================
 if st.session_state.page_mode == "Research Agent":
     st.markdown(
-        '<div class="section-title">🔬 Research Agent</div>',
+        '<div class="section-title">Research Agent</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="section-subtitle">Ask research questions and get comprehensive, citation-backed answers powered by autonomous AI agents.</div>',
+        '<div class="section-subtitle">Ask research questions and get comprehensive, citation-backed answers powered by autonomous agents.</div>',
         unsafe_allow_html=True,
     )
 
     col_main, col_meta = st.columns([2.8, 1.2], gap="large")
 
-    # ---------- MAIN CHAT AREA ----------
     with col_main:
         messages = st.session_state.working_messages
 
         if not messages:
-            # Empty state hero
-            
-
-            st.markdown("### Quick RAG prompts")
+            st.markdown("### Quick prompts")
 
             qcol1, qcol2 = st.columns(2, gap="medium")
 
             with qcol1:
                 if st.button(
-                    "🔍 Compare Qdrant, Pinecone, and Weaviate as vector databases for RAG workloads",
+                    "Compare Qdrant, Pinecone, and Weaviate for RAG workloads",
                     use_container_width=True,
                 ):
                     handle_user_query(
@@ -774,7 +691,7 @@ if st.session_state.page_mode == "Research Agent":
                     )
 
                 if st.button(
-                    "🧱 Design a retrieval-augmented generation pipeline for legal documents",
+                    "Design a RAG pipeline for long legal documents",
                     use_container_width=True,
                 ):
                     handle_user_query(
@@ -783,7 +700,7 @@ if st.session_state.page_mode == "Research Agent":
 
             with qcol2:
                 if st.button(
-                    "📊 How do we evaluate RAG systems (retrieval vs generation metrics)?",
+                    "How do we evaluate RAG systems?",
                     use_container_width=True,
                 ):
                     handle_user_query(
@@ -791,14 +708,13 @@ if st.session_state.page_mode == "Research Agent":
                     )
 
                 if st.button(
-                    "🧠 Best practices for embeddings, chunking, and metadata in production RAG",
+                    "Best practices for embeddings, chunking, and metadata",
                     use_container_width=True,
                 ):
                     handle_user_query(
                         "Summarize best practices for embeddings, chunking, and metadata design when deploying a production RAG system."
                     )
 
-        # Render existing conversation
         for msg in messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
@@ -807,14 +723,13 @@ if st.session_state.page_mode == "Research Agent":
                     and msg.get("queries")
                     and isinstance(msg.get("queries"), list)
                 ):
-                    with st.expander("📚 View search queries used"):
+                    with st.expander("View search queries used"):
                         for i, query in enumerate(msg["queries"], 1):
                             st.markdown(f"**{i}.** {query}")
 
-    # ---------- RUN DETAILS ----------
     with col_meta:
         st.markdown(
-            '<div class="meta-section-title">🔍 Run Details</div>',
+            '<div class="meta-section-title">Run Details</div>',
             unsafe_allow_html=True,
         )
 
@@ -893,7 +808,6 @@ if st.session_state.page_mode == "Research Agent":
                 unsafe_allow_html=True,
             )
 
-            # --- NEW: LLM vs retrieved token stats ---
             stats = last_assistant.get("stats") or {}
             llm_tokens = int(stats.get("llm_tokens", 0) or 0)
             retrieved_tokens = int(stats.get("retrieved_tokens", 0) or 0)
@@ -916,7 +830,6 @@ if st.session_state.page_mode == "Research Agent":
                     unsafe_allow_html=True,
                 )
 
-            # --- NEW: Clickable references ---
             citations = last_assistant.get("citations") or []
             citations_items = ""
             for c in citations:
@@ -970,7 +883,6 @@ if st.session_state.page_mode == "Research Agent":
                 unsafe_allow_html=True,
             )
 
-    # Chat input
     user_prompt = st.chat_input(
         "Ask a research question or request clarification..."
     )
@@ -982,7 +894,7 @@ if st.session_state.page_mode == "Research Agent":
 # ==========================================================
 elif st.session_state.page_mode == "Knowledge Base":
     st.markdown(
-        '<div class="section-title">📚 Knowledge Base</div>',
+        '<div class="section-title">Knowledge Base</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -997,9 +909,9 @@ elif st.session_state.page_mode == "Knowledge Base":
             """
             <div class="upload-area">
                 <div style="position: relative; z-index: 1;">
-                    <div class="upload-title">📄 Upload Research Documents</div>
+                    <div class="upload-title">Upload research documents</div>
                     <div class="upload-description">
-                        PDFs will be parsed, chunked, embedded with state-of-the-art models, 
+                        PDFs will be parsed, chunked, embedded with transformer models,
                         and indexed in the vector database for semantic retrieval.
                     </div>
                 </div>
@@ -1019,7 +931,7 @@ elif st.session_state.page_mode == "Knowledge Base":
             st.markdown(
                 f"""
                 <div class="info-box">
-                    <h4>📎 Selected File</h4>
+                    <h4>Selected file</h4>
                     <ul>
                         <li><strong>Name:</strong> {uploaded_file.name}</li>
                         <li><strong>Size:</strong> {uploaded_file.size / 1024:.1f} KB</li>
@@ -1034,7 +946,7 @@ elif st.session_state.page_mode == "Knowledge Base":
 
             with col_btn1:
                 if st.button(
-                    "🚀 Ingest Document",
+                    "Ingest document",
                     use_container_width=True,
                     type="primary",
                 ):
@@ -1050,7 +962,7 @@ elif st.session_state.page_mode == "Knowledge Base":
                                 )
                             }
                             response = requests.post(
-                                "http://localhost:8000/upload",
+                                f"{BACKEND_URL}/upload",
                                 files=files,
                                 timeout=120,
                             )
@@ -1074,27 +986,26 @@ elif st.session_state.page_mode == "Knowledge Base":
                             )
                         except requests.exceptions.ConnectionError:
                             st.error(
-                                "🔌 Cannot connect to backend. Ensure the API server is running."
+                                f"🔌 Cannot connect to backend. Ensure the API server is reachable at {BACKEND_URL}."
                             )
                         except Exception as e:
                             st.error(f"❌ Upload error: {str(e)}")
 
             with col_btn2:
                 if st.button(
-                    "🔄 Clear Selection", use_container_width=True
+                    "Clear selection", use_container_width=True
                 ):
                     st.rerun()
 
-        # Corpus stats
         try:
             stats_response = requests.get(
-                "http://localhost:8000/admin/stats", timeout=5
+                f"{BACKEND_URL}/admin/stats", timeout=5
             )
             if stats_response.status_code == 200:
                 stats = stats_response.json()
 
                 st.markdown("---")
-                st.markdown("### 📊 Corpus Statistics")
+                st.markdown("### Corpus statistics")
 
                 stat_cols = st.columns(3)
 
@@ -1134,25 +1045,25 @@ elif st.session_state.page_mode == "Knowledge Base":
             pass
 
     with col_info:
-        st.markdown("### 🔧 How It Works")
+        st.markdown("### How it works")
 
         st.markdown(
             """
             <div class="info-box">
-                <h4>Document Processing Pipeline</h4>
+                <h4>Document processing pipeline</h4>
                 <ul>
                     <li><strong>Extraction:</strong> Text is extracted from PDF with metadata preservation.</li>
-                    <li><strong>Chunking:</strong> Content is split into semantic passages (~500 tokens).</li>
+                    <li><strong>Chunking:</strong> Content is split into semantic passages.</li>
                     <li><strong>Embedding:</strong> Each passage is encoded using transformer models.</li>
                     <li><strong>Indexing:</strong> Vectors are stored in Qdrant for fast similarity search.</li>
-                    <li><strong>Retrieval:</strong> Hybrid search (dense + sparse) finds relevant passages.</li>
+                    <li><strong>Retrieval:</strong> Hybrid search finds relevant passages at query time.</li>
                 </ul>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.markdown("### 💡 Best Practices")
+        st.markdown("### Best practices")
 
         st.markdown(
             """
@@ -1173,7 +1084,7 @@ elif st.session_state.page_mode == "Knowledge Base":
 # ==========================================================
 elif st.session_state.page_mode == "Admin":
     st.markdown(
-        '<div class="section-title">⚙️ System Administration</div>',
+        '<div class="section-title">System Administration</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -1183,7 +1094,7 @@ elif st.session_state.page_mode == "Admin":
 
     try:
         status_response = requests.get(
-            "http://localhost:8000/admin/migration_status", timeout=10
+            f"{BACKEND_URL}/admin/migration_status", timeout=10
         )
         status = (
             status_response.json()
@@ -1195,11 +1106,11 @@ elif st.session_state.page_mode == "Admin":
 
     if status is None:
         st.error(
-            "🔌 Cannot connect to backend API. Please ensure the server is running on http://localhost:8000"
+            f"🔌 Cannot connect to backend API. Please ensure the server is reachable at {BACKEND_URL}"
         )
         st.stop()
 
-    st.markdown("### 📈 System Status")
+    st.markdown("### System status")
 
     status_cols = st.columns(4)
 
@@ -1220,7 +1131,7 @@ elif st.session_state.page_mode == "Admin":
         st.markdown(
             f"""
             <div class="stat-container">
-                <div class="stat-label">Process State</div>
+                <div class="stat-label">Process state</div>
                 <div style="font-size: 2rem; margin: 0.5rem 0;">{icon}</div>
                 <span class="status-badge {badge_class}">{badge_text}</span>
             </div>
@@ -1269,12 +1180,12 @@ elif st.session_state.page_mode == "Admin":
     col_maint, col_logs = st.columns([1.5, 1.5], gap="large")
 
     with col_maint:
-        st.markdown("### 🔧 Database Maintenance")
+        st.markdown("### Database maintenance")
 
         st.markdown(
             """
             <div class="info-box">
-                <h4>⚠️ Warning</h4>
+                <h4>Warning</h4>
                 <ul>
                     <li>Clearing the vector database will permanently delete all indexed documents and embeddings.</li>
                     <li>This action cannot be undone.</li>
@@ -1290,7 +1201,7 @@ elif st.session_state.page_mode == "Admin":
         )
 
         if st.button(
-            "🗑️ Clear Vector Database",
+            "Clear vector database",
             use_container_width=True,
             disabled=not confirm,
             type="primary" if confirm else "secondary",
@@ -1298,13 +1209,13 @@ elif st.session_state.page_mode == "Admin":
             with st.spinner("Clearing vector database..."):
                 try:
                     clear_response = requests.post(
-                        "http://localhost:8000/admin/clear_vector_db",
+                        f"{BACKEND_URL}/admin/clear_vector_db",
                         timeout=30,
                     )
 
                     if clear_response.status_code == 200:
                         st.success(
-                            "✅ Vector database has been successfully cleared!"
+                            "✅ Vector database has been successfully cleared."
                         )
                         time.sleep(2)
                         st.rerun()
@@ -1318,35 +1229,37 @@ elif st.session_state.page_mode == "Admin":
                         "⏱️ Clear operation timed out. The database may be large."
                     )
                 except requests.exceptions.ConnectionError:
-                    st.error("🔌 Cannot connect to backend server.")
+                    st.error(
+                        f"🔌 Cannot connect to backend server at {BACKEND_URL}."
+                    )
                 except Exception as e:
                     st.error(f"❌ Error: {str(e)}")
 
-        st.markdown("### 🔄 Background Jobs")
+        st.markdown("### Background jobs")
 
         if st.button(
-            "🔃 Restart Migration Process", use_container_width=True
+            "Restart migration process", use_container_width=True
         ):
             try:
                 restart_response = requests.post(
-                    "http://localhost:8000/admin/restart_migration",
+                    f"{BACKEND_URL}/admin/restart_migration",
                     timeout=10,
                 )
                 if restart_response.status_code == 200:
-                    st.success("✅ Migration process restarted")
+                    st.success("✅ Migration process restarted.")
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("❌ Failed to restart migration")
+                    st.error("❌ Failed to restart migration.")
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
 
     with col_logs:
-        st.markdown("### 📋 Recent Activity")
+        st.markdown("### Recent activity")
 
         try:
             logs_response = requests.get(
-                "http://localhost:8000/admin/logs", timeout=5
+                f"{BACKEND_URL}/admin/logs", timeout=5
             )
             if logs_response.status_code == 200:
                 logs = logs_response.json().get("logs", [])
@@ -1386,17 +1299,17 @@ elif st.session_state.page_mode == "Admin":
                             unsafe_allow_html=True,
                         )
                 else:
-                    st.info("No recent activity to display")
+                    st.info("No recent activity to display.")
             else:
-                st.warning("Could not fetch activity logs")
+                st.warning("Could not fetch activity logs.")
         except Exception:
-            st.warning("Activity logs unavailable")
+            st.warning("Activity logs unavailable.")
 
-        st.markdown("### 🔍 System Info")
+        st.markdown("### System info")
 
         try:
             info_response = requests.get(
-                "http://localhost:8000/admin/system_info", timeout=5
+                f"{BACKEND_URL}/admin/system_info", timeout=5
             )
             if info_response.status_code == 200:
                 info = info_response.json()
@@ -1404,7 +1317,7 @@ elif st.session_state.page_mode == "Admin":
                 st.markdown(
                     f"""
                     <div class="meta-card">
-                        <div class="meta-label">Backend Version</div>
+                        <div class="meta-label">Backend version</div>
                         <div class="meta-content">{info.get('version', 'Unknown')}</div>
                     </div>
                     <div class="meta-card">
@@ -1412,11 +1325,11 @@ elif st.session_state.page_mode == "Admin":
                         <div class="meta-content">{info.get('vector_db', 'Qdrant')}</div>
                     </div>
                     <div class="meta-card">
-                        <div class="meta-label">Embedding Model</div>
+                        <div class="meta-label">Embedding model</div>
                         <div class="meta-content">{info.get('embedding_model', 'Unknown')}</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
         except Exception:
-            st.info("System information unavailable")
+            st.info("System information unavailable.")
