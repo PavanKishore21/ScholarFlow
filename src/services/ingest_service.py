@@ -11,21 +11,18 @@ log = get_logger("IngestService")
 
 
 class IngestService:
-    def __init__(self) -> None:
+    def __init__(self):
         self.vs = VectorStore()
         if not self.vs.available:
             log.warning("IngestService initialized but VectorStore is unavailable")
 
     def ingest_pdf_bytes(self, pdf_bytes: bytes, filename: str):
-        """
-        Extract text from a PDF and index it into the vector store.
-        """
         text = extract_pdf_text(pdf_bytes)
         title = filename.replace(".pdf", "")
         abstract = (text[:1200].strip() + "...") if text else "No text extracted."
 
         paper_id = str(uuid.uuid4())[:8]
-        authors = ["Uploaded User"]  # kept for future graph support
+        authors = ["Uploaded User"]  # keep placeholder for future graph
 
         log.info(
             "Ingesting PDF: title=%s, paper_id=%s, text_len=%d",
@@ -34,7 +31,6 @@ class IngestService:
             len(text or ""),
         )
 
-        # Vector store (chunks)
         chunks = chunk_text(text or "")
         if not chunks:
             log.warning("No chunks produced for %s (paper_id=%s)", title, paper_id)
