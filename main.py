@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Union
 import io
 import uuid
 
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pypdf import PdfReader
@@ -15,12 +15,13 @@ from src.logger import get_logger
 log = get_logger("Main")
 
 # ----------------------------------------------------------
-# FastAPI app (this is what Render will load as main:api)
+# FastAPI app (this is what Render loads as main:api)
 # ----------------------------------------------------------
 api = FastAPI(title="ScholarFlow API")
 
-ingestor = IngestService()
-migration_service = MigrationService()
+# We’ll initialize these on startup instead of at import time
+ingestor: IngestService | None = None
+migration_service: MigrationService | None = None
 
 # ----------------------------------------------------------
 # CORS
@@ -33,25 +34,39 @@ api.add_middleware(
 )
 
 # ----------------------------------------------------------
-# Health check (for debugging Render)
+# Health check
 # ----------------------------------------------------------
 @api.get("/health")
 def healthcheck():
     return {"status": "ok"}
 
 # ----------------------------------------------------------
-# Startup — run migration in background
+# Startup — init services & run migration in background
 # ----------------------------------------------------------
 @api.on_event("startup")
 async def startup_event():
-    log.info("🚀 FastAPI startup: launching background migration worker")
+    global ingestor, migration_service
+
+    log.info("🚀 FastAPI startup: initializing services")
+
     try:
-        migration_service.start_background_migration()
+        if ingestor is None:
+            ingestor = IngestService()
+            log.info("✅ IngestService initialized")
     except Exception as e:
-        log.exception(f"Failed to start migration worker: {e}")
+        log.exception(f"Failed to initialize IngestService: {e}")
+
+    try:
+        if migration_service is None:
+            migration_service = MigrationService()
+            log.info("✅ MigrationService initialized")
+            migration_service.start_background_migration()
+            log.info("🚀 Started background migration worker")
+    except Exception as e:
+        log.exception(f"Failed to initialize MigrationService: {e}")
 
 # ----------------------------------------------------------
-# Request / response models
+# Models & helpers
 # ----------------------------------------------------------
 class Request(BaseModel):
     topic: str
@@ -143,6 +158,12 @@ def generate_review(req: Request):
 # ----------------------------------------------------------
 @api.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
+    if ingestor is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ingest service not initialized",
+        )
+
     content = await file.read()
     reader = PdfReader(io.BytesIO(content))
     extracted = ""
@@ -171,12 +192,19 @@ async def upload_pdf(file: UploadFile = File(...)):
 # ----------------------------------------------------------
 @api.post("/admin/clear_vector_db")
 def clear_vector_db():
+    if ingestor is None or getattr(ingestor, "vs", None) is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Vector store not initialized",
+        )
+
     ingestor.vs.clear_collection()
 
-    migration_service.running = False
-    migration_service.finished = False
-    migration_service.migrated = 0
-    migration_service.errors = 0
+    if migration_service is not None:
+        migration_service.running = False
+        migration_service.finished = False
+        migration_service.migrated = 0
+        migration_service.errors = 0
 
     return {"status": "cleared"}
 
@@ -185,6 +213,15 @@ def clear_vector_db():
 # ----------------------------------------------------------
 @api.get("/admin/migration_status")
 def migration_status():
+    if migration_service is None:
+        return {
+            "running": False,
+            "finished": False,
+            "migrated": 0,
+            "errors": 0,
+            "uptime": "N/A",
+        }
+
     return {
         "running": migration_service.running,
         "finished": migration_service.finished,
@@ -198,6 +235,12 @@ def migration_status():
 # ----------------------------------------------------------
 @api.post("/admin/restart_migration")
 def restart_migration():
+    if migration_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Migration service not initialized",
+        )
+
     migration_service.start_background_migration()
     return {"status": "restarted"}
 
@@ -206,9 +249,13 @@ def restart_migration():
 # ----------------------------------------------------------
 @api.get("/admin/stats")
 def corpus_stats():
-    """
-    Returns simple stats used by the Knowledge Base view.
-    """
+    if ingestor is None:
+        return {
+            "documents": 0,
+            "passages": 0,
+            "embeddings": 0,
+        }
+
     return {
         "documents": getattr(ingestor, "documents_count", 0),
         "passages": getattr(ingestor, "passages_count", 0),
@@ -220,9 +267,9 @@ def corpus_stats():
 # ----------------------------------------------------------
 @api.get("/admin/logs")
 def admin_logs():
-    """
-    Return recent activity logs for the Admin screen.
-    """
+    if migration_service is None:
+        return {"logs": []}
+
     logs = getattr(migration_service, "logs", [])
     normalized: List[Dict[str, str]] = []
     for entry in logs:
