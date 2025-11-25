@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-dotenv
+pydantic-settings
+
+qdrant-client
+langgraph
+langchain-groq
+langchain-text-splitters
+
+pypdf
