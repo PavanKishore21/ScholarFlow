@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     NEO4J_PASSWORD: Optional[str] = None
 
     # Qdrant
-    # Default to localhost for dev; override via env on Render
+    # Default localhost for dev; override via env on Render
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: Optional[str] = None
 
@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
 
     # --- Vector store ---
+    # all-MiniLM-L6-v2 has 384-dim embeddings
+    COLLECTION_NAME: str = "scholarflow_chunks"
+    VECTOR_SIZE: int = 384
     TOP_K_VECTOR: int = 6
     TOP_K_GRAPH: int = 4
     TOP_K_FINAL: int = 5
