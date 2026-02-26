@@ -1,6 +1,8 @@
 # src/db/embeddings.py
 
 from functools import lru_cache
+import hashlib
+import math
 from typing import Any, List, Union
 
 from src.config import settings
@@ -18,23 +20,35 @@ except Exception:
     SentenceTransformer = None  # type: ignore
 
 
-class DummyEncoder:
+class HashedEncoder:
     """
-    Lightweight stand-in encoder for environments where
-    sentence-transformers / torch are not available.
-
-    It returns zero vectors of length settings.VECTOR_SIZE so the rest of
-    the pipeline (Qdrant, etc.) can still work without crashing.
+    Lightweight fallback encoder for environments where sentence-transformers
+    is unavailable. It creates deterministic hashed vectors from token strings.
     """
 
     def __init__(self, dim: int = None) -> None:
         self.dim = dim or getattr(settings, "VECTOR_SIZE", 384)
 
+    def _encode_one(self, text: str) -> List[float]:
+        tokens = (text or "").lower().split()
+        vec = [0.0] * self.dim
+
+        if not tokens:
+            return vec
+
+        for token in tokens:
+            digest = hashlib.blake2b(token.encode("utf-8"), digest_size=16).digest()
+            for b in digest:
+                idx = b % self.dim
+                vec[idx] += 1.0 if (b % 2 == 0) else -1.0
+
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        return [v / norm for v in vec]
+
     def encode(self, texts: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:
         if isinstance(texts, str):
-            return [0.0] * self.dim
-        # assume iterable of strings
-        return [[0.0] * self.dim for _ in texts]
+            return self._encode_one(texts)
+        return [self._encode_one(t) for t in texts]
 
 
 @lru_cache(maxsize=1)
@@ -44,16 +58,28 @@ def get_encoder() -> Any:
 
     - Local dev: if sentence-transformers is installed, returns a real
       SentenceTransformer model.
-    - Render backend: falls back to DummyEncoder (no torch/transformers).
+    - Render backend: falls back to HashedEncoder.
     """
+    if settings.EMBEDDING_STRATEGY.lower() == "hashed":
+        log.info("Using hashed fallback encoder (EMBEDDING_STRATEGY=hashed)")
+        return HashedEncoder()
+
     if HAS_ST and SentenceTransformer is not None:
+        if not settings.EMBEDDING_ALLOW_REMOTE_DOWNLOAD:
+            log.warning(
+                "EMBEDDING_ALLOW_REMOTE_DOWNLOAD is disabled; using hashed fallback encoder."
+            )
+            return HashedEncoder()
         log.info(f"Loading SentenceTransformer model: {settings.EMBEDDING_MODEL}")
         try:
             model = SentenceTransformer(settings.EMBEDDING_MODEL)
             return model
         except Exception as e:
-            log.exception(f"Failed to load SentenceTransformer, falling back to DummyEncoder: {e}")
-            return DummyEncoder()
+            log.exception(
+                "Failed to load SentenceTransformer, falling back to hashed encoder: %s",
+                e,
+            )
+            return HashedEncoder()
 
-    log.warning("sentence-transformers not available, using DummyEncoder")
-    return DummyEncoder()
+    log.warning("sentence-transformers not available, using hashed fallback encoder")
+    return HashedEncoder()

@@ -1,7 +1,14 @@
 # src/db/vector_store.py
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 from src.config import settings
 from src.db.embeddings import get_encoder
 from src.logger import get_logger
@@ -26,14 +33,27 @@ def _to_list(vec):
 
 class VectorStore:
     def __init__(self):
-        self.client = QdrantClient(
-            url=settings.QDRANT_URL,
-            api_key=settings.QDRANT_API_KEY,
-        )
+        self.client = None
+        self.available = False
+        self.last_error = None
         self.encoder = get_encoder()
-        self.init_collection()
+        try:
+            self.client = QdrantClient(
+                url=settings.QDRANT_URL,
+                api_key=settings.QDRANT_API_KEY,
+            )
+            self.init_collection()
+            self.available = True
+        except Exception as e:
+            self.last_error = str(e)
+            log.warning("VectorStore unavailable: %s", e)
+
+    def _require_client(self):
+        if not self.client:
+            raise RuntimeError("Vector store is unavailable")
 
     def init_collection(self):
+        self._require_client()
         if not self.client.collection_exists(settings.COLLECTION_NAME):
             log.info("Creating Qdrant collection...")
             self.client.create_collection(
@@ -50,6 +70,7 @@ class VectorStore:
     # CLEAR
     # -------------------------
     def clear_collection(self):
+        self._require_client()
         log.warning("Clearing Qdrant collection...")
         self.client.delete_collection(settings.COLLECTION_NAME)
         self.init_collection()
@@ -59,6 +80,7 @@ class VectorStore:
     # UPSERT
     # -------------------------
     def upsert_chunk(self, chunk_id: str, text: str, payload: dict):
+        self._require_client()
         raw_vec = self.encoder.encode(text)
         vec = _to_list(raw_vec)
 
@@ -77,6 +99,7 @@ class VectorStore:
     # SEARCH
     # -------------------------
     def search(self, query: str, top_k: int):
+        self._require_client()
         raw_qv = self.encoder.encode(query)
         qv = _to_list(raw_qv)
 
@@ -87,3 +110,36 @@ class VectorStore:
             with_payload=True,
         ).points
         return res
+
+    def get_by_id(self, paper_id: str):
+        self._require_client()
+        points, _ = self.client.scroll(
+            collection_name=settings.COLLECTION_NAME,
+            limit=1,
+            with_payload=True,
+            with_vectors=False,
+            scroll_filter=Filter(
+                must=[FieldCondition(key="paper_id", match=MatchValue(value=paper_id))]
+            ),
+        )
+        if not points:
+            return None
+        return points[0].payload or None
+
+    def count_points(self) -> int:
+        self._require_client()
+        result = self.client.count(
+            collection_name=settings.COLLECTION_NAME,
+            exact=True,
+        )
+        return int(getattr(result, "count", 0))
+
+    def iter_points(self, limit: int = 10_000):
+        self._require_client()
+        points, _ = self.client.scroll(
+            collection_name=settings.COLLECTION_NAME,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        return points

@@ -52,7 +52,6 @@ htmlcov/
 secrets.toml
 
 # Streamlit
-.streamlit/config.toml
 .streamlit/credentials.toml
 .streamlit/secrets.toml
 

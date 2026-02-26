@@ -2,7 +2,7 @@ import arxiv
 from src.services.ingest_service import IngestService
 
 def ingest_data():
-    print("🚀 Starting arXiv ingestion...")
+    print("Starting arXiv ingestion...")
     ingest = IngestService()
 
     client = arxiv.Client()
@@ -19,28 +19,15 @@ def ingest_data():
         abstract = r.summary
         authors = [a.name for a in r.authors]
 
-        # Insert into graph directly
-        ingest.gs.add_paper(
+        ingest.ingest_text(
             paper_id=paper_id,
             title=title,
-            abstract=abstract,
+            text=f"{title}\n\n{abstract}",
             authors=authors,
-            source="arXiv"
+            source="arXiv",
         )
 
-        # Insert abstract as a single chunk for now
-        ingest.vs.upsert_chunk(
-            chunk_id=paper_id,
-            text=f"{title}\n{abstract}",
-            payload={
-                "paper_id": paper_id,
-                "title": title,
-                "chunk_index": 0,
-                "source": "arXiv"
-            }
-        )
-
-    print("✅ arXiv ingestion complete.")
+    print("arXiv ingestion complete.")
 
 if __name__ == "__main__":
     ingest_data()

@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 from src.logger import get_logger
 
@@ -33,26 +32,37 @@ class GraphStore:
     # ------------------------------------------------------------
     def add_paper(self, paper_id: str, title: str, authors: list):
         """Adds paper + edges to authors."""
+        node_ids = {n.get("id") for n in self.graph["nodes"]}
+        edge_keys = {(e.get("source"), e.get("target"), e.get("type")) for e in self.graph["edges"]}
+
         # Add paper node
-        self.graph["nodes"].append({
-            "id": paper_id,
-            "type": "paper",
-            "title": title,
-            "authors": authors
-        })
+        if paper_id not in node_ids:
+            self.graph["nodes"].append({
+                "id": paper_id,
+                "type": "paper",
+                "title": title,
+                "authors": authors
+            })
 
         # Add author nodes + edges
         for a in authors:
-            self.graph["nodes"].append({
-                "id": f"author:{a}",
-                "type": "author",
-                "name": a
-            })
-            self.graph["edges"].append({
-                "source": paper_id,
-                "target": f"author:{a}",
-                "type": "AUTHORED_BY"
-            })
+            author_id = f"author:{a}"
+            if author_id not in node_ids:
+                self.graph["nodes"].append({
+                    "id": author_id,
+                    "type": "author",
+                    "name": a
+                })
+                node_ids.add(author_id)
+
+            edge_key = (paper_id, author_id, "AUTHORED_BY")
+            if edge_key not in edge_keys:
+                self.graph["edges"].append({
+                    "source": paper_id,
+                    "target": author_id,
+                    "type": "AUTHORED_BY"
+                })
+                edge_keys.add(edge_key)
 
         self._save()
 

@@ -1,102 +1,121 @@
-# ScholarFlow 
+# ScholarFlow
 
-ScholarFlow is an **autonomous research workspace** built on top of a Retrieval-Augmented Generation (RAG) stack.
+ScholarFlow is a production-style RAG workspace built with:
 
-It combines:
+- `FastAPI` backend
+- `Streamlit` control plane UI
+- `LangGraph` multi-step agent workflow
+- `Qdrant` vector retrieval + lightweight author graph expansion
 
-- A **Research Agent** (planner → retriever → writer → critic)
-- A **Knowledge Base** where you can upload PDFs and index them into a vector store
-- An **Admin dashboard** to manage migrations and the vector database
+The project is designed to demonstrate practical RAG engineering depth: retrieval diagnostics, grounded answer generation, answer quality scoring, ingestion operations, and admin controls.
 
-The UI is built with **Streamlit**, the backend with **FastAPI + LangGraph**, and retrieval is powered by **Qdrant** (vector store) and **SentenceTransformers** embeddings. LLM calls are routed through **Groq**.
+## Core Capabilities
 
----
+### 1. Research Assistant
+- Planner -> Retriever -> Writer -> Critic workflow
+- Configurable run modes: `fast`, `balanced`, `deep`
+- Adjustable retrieval controls:
+  - planner query budget
+  - citation budget
+  - score threshold
+  - graph expansion toggle
+- Response metadata:
+  - token usage
+  - latency
+  - citation count
+  - retrieval diagnostics
 
-## Features
+### 2. RAG Studio
+- **Retrieval Inspector**
+  - direct `/retrieve` calls
+  - ranking and score visibility
+  - context preview and diagnostics JSON
+- **Answer Evaluator**
+  - direct `/evaluate` scoring
+  - grounding metrics and improvement suggestions
+  - optional auto-retrieval context for evaluation
+- **Prompt Arena**
+  - side-by-side prompt comparison
+  - latency/citation metrics for A/B prompt testing
 
-### Research Agent
+### 3. Knowledge Base
+- PDF ingestion (`/upload`)
+- chunking + embedding + indexing into Qdrant
+- corpus diagnostics:
+  - collection vector count
+  - paper count estimate
+  - document/passage/embedding stats
 
-- Chat-like research interface
-- Multi-step agent pipeline:
-  - **Planner**: decomposes your query into focused search queries
-  - **Retriever**: hybrid retrieval over your indexed corpus
-  - **Writer**: drafts a structured literature-style answer in Markdown
-  - **Critic**: reviews the draft and returns a short verdict / revision hints
-- Conversation history with:
-  - Multiple saved conversations
-  - Ability to reopen previous sessions from the sidebar
-  - Per-response “Run details” panel (query, search plan, critic feedback)
+### 4. Admin Operations
+- migration status + restart
+- vector DB reset
+- logs + diagnostics panels
+- system profile and health visibility
 
----
+## API Surface
 
-### Knowledge Base
+### Public
+- `GET /health`
+- `POST /generate`
+- `POST /retrieve`
+- `POST /evaluate`
+- `POST /upload`
 
-- Upload **PDF documents**
-- Text is parsed and:
-  - Split into passages
-  - Embedded with `sentence-transformers`
-  - Indexed into **Qdrant** under a configurable collection
-- These indexed passages are used as the retrieval corpus for the Research Agent.
+### Admin (token-gated when `ADMIN_API_TOKEN` is set)
+- `GET /admin/stats`
+- `GET /admin/collection_info`
+- `GET /admin/paper_count`
+- `GET /admin/migration_status`
+- `POST /admin/restart_migration`
+- `POST /admin/clear_vector_db`
+- `GET /admin/logs`
+- `GET /admin/system_info`
+- `GET /admin/debug` (if enabled)
 
----
+## Project Structure
 
-### Admin Dashboard
+- `ui.py` - Streamlit app
+- `main.py` - FastAPI app
+- `src/workflow.py` - LangGraph orchestration
+- `src/agents/research_agents.py` - planner/writer/critic logic + fallbacks
+- `src/services/rag_service.py` - hybrid retrieval, ranking, diagnostics
+- `src/services/ingest_service.py` - PDF ingest pipeline
+- `src/services/migration_service.py` - schema migration worker
+- `src/db/vector_store.py` - Qdrant adapter
+- `src/db/graph_store.py` - JSON graph store
 
-- View **migration status** of the vector store
-- Trigger **vector DB reset** via the `/admin/clear_vector_db` endpoint
-- Designed for local dev: helps you wipe & re-index quickly during iteration
+## Run Locally
 
----
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-## Architecture Overview
+2. Start backend:
+```bash
+uvicorn main:api --reload --port 8000
+```
 
-High-level components:
+3. Start UI:
+```bash
+streamlit run ui.py
+```
 
-- **UI**: `ui.py`
+## Environment Variables
 
-  - Streamlit app
-  - Modes: `Research Agent`, `Knowledge Base`, `Admin`
-  - Talks to FastAPI over HTTP (`/generate`, `/upload`, `/admin/*`)
+Set these in `.env` as needed:
 
-- **API**: `main.py`
+- `GROQ_API_KEY`
+- `ADMIN_API_TOKEN`
+- `QDRANT_URL`
+- `QDRANT_API_KEY`
+- `COLLECTION_NAME`
+- `EMBEDDING_MODEL`
+- `EMBEDDING_STRATEGY` (`auto` or `hashed`)
+- `EMBEDDING_ALLOW_REMOTE_DOWNLOAD`
+- `CORS_ALLOWED_ORIGINS`
 
-  - FastAPI application (`api`)
-  - Endpoints:
-    - `POST /generate` – run the LangGraph workflow and return `review`, `critique`, `queries`
-    - `POST /upload` – upload and index a PDF
-    - `POST /admin/clear_vector_db` – clear Qdrant collection
-    - `GET /admin/migration_status` – read migration worker status
+## Notes
 
-- **Agent Orchestration**: `src/workflow.py`
-
-  - Defines LangGraph `StateGraph`
-  - Nodes: `Planner`, `Researcher`, `Writer`, `Critic`
-  - Conditional loop for one or more revision cycles
-
-- **Agents**: `src/agents/research_agents.py`
-
-  - Wraps the Groq chat models
-  - Implements `plan_research`, `retrieve`, `write`, `critique`
-
-- **RAG Services**: `src/services/rag_service.py`
-
-  - Hybrid retrieval over:
-    - Vector store (Qdrant)
-    - (Optionally) graph store (Neo4j) for author / paper relations
-  - Returns combined context for the writer
-
-- **Ingestion & Migration**:
-
-  - `src/services/ingest_service.py` – handles PDF → text → embeddings → Qdrant (+ graph)
-  - `src/services/migration_service.py` – background migration worker for schema updates
-
-- **Persistence**:
-
-  - `src/db/vector_store.py` – Qdrant client wrapper, schema checks, auto-migration, clear-collection helper
-  - `src/db/graph_store.py` – Neo4j client wrapper (if used)
-
-- **Config & Logging**:
-  - `src/config.py` – environment-driven settings (API keys, URLs, model names, collection name)
-  - `src/logger.py` – unified logger used across services
-
----
+- If `GROQ_API_KEY` is missing, ScholarFlow falls back to deterministic planning/writing behavior so the app still runs.
+- For production deployment, point `QDRANT_URL` to managed Qdrant and set strict CORS/admin token values.

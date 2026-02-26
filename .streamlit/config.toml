@@ -1,0 +1,14 @@
+[theme]
+primaryColor = "#10a37f" # ChatGPT-style green accent
+backgroundColor = "#121417" # Dark app canvas
+secondaryBackgroundColor = "#171b21" # Sidebar/panel background
+textColor = "#eceff4" # High-contrast text on dark
+font = "sans serif"
+
+[server]
+headless = true
+address = "0.0.0.0"
+port = 8501
+
+[browser]
+gatherUsageStats = false # Remove "Running..." indicators

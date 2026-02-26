@@ -1,515 +1,645 @@
-import streamlit as st
-import requests
+import os
 import time
+from html import escape
+from typing import Any, Dict, Tuple
 
-# ----------------------------------------------------------
-# BACKEND CONFIG
-# ----------------------------------------------------------
-BACKEND_URL = "https://scholarflow.onrender.com"
+import requests
+import streamlit as st
 
-# ----------------------------------------------------------
-# 1. PAGE CONFIG
-# ----------------------------------------------------------
+
+DEFAULT_BACKEND_URL = os.getenv("SCHOLARFLOW_BACKEND_URL", "https://scholarflow.onrender.com")
+DEFAULT_ADMIN_TOKEN = os.getenv("SCHOLARFLOW_ADMIN_TOKEN", "")
+PAGES = ["Getting Started", "Knowledge Base", "Research", "RAG Studio", "Admin"]
+PAGE_META = {
+    "Getting Started": {
+        "label": "1. Start Here",
+        "subtitle": "",
+    },
+    "Knowledge Base": {
+        "label": "2. Knowledge Base",
+        "subtitle": "Upload documents and track corpus health.",
+    },
+    "Research": {
+        "label": "3. Research Chat",
+        "subtitle": "Ask questions and get cited answers.",
+    },
+    "RAG Studio": {
+        "label": "4. RAG Studio",
+        "subtitle": "Check retrieval, score answers, and compare prompts.",
+    },
+    "Admin": {
+        "label": "5. Admin",
+        "subtitle": "Maintenance and diagnostics controls.",
+    },
+}
+
+
 st.set_page_config(
     page_title="ScholarFlow",
-    page_icon="🧬",
+    page_icon="S",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ----------------------------------------------------------
-# 2. MODERN PROFESSIONAL STYLES
-# ----------------------------------------------------------
+
 st.markdown(
     """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
-    :root {
-        --bg-primary: #0a0e1a;
-        --bg-secondary: #111827;
-        --bg-tertiary: #1a1f35;
-        --bg-card: #151b2e;
-        --bg-card-hover: #1e2640;
-        --border-subtle: #1e293b;
-        --border-medium: #2d3a52;
-        --accent-primary: #7c3aed;
-        --accent-secondary: #a78bfa;
-        --accent-gradient: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
-        --text-tertiary: #64748b;
-        --success: #10b981;
-        --warning: #f59e0b;
-        --error: #ef4444;
-        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-        --shadow-glow: 0 0 20px rgba(124, 58, 237, 0.3);
-    }
+:root {
+  --sf-bg: #121417;
+  --sf-bg-elev: #171b21;
+  --sf-bg-soft: #1e242d;
+  --sf-surface: #202631;
+  --sf-border: #2d3542;
+  --sf-text: #eceff4;
+  --sf-text-soft: #d9e1ec;
+  --sf-muted: #9aa3b5;
+  --sf-primary: #10a37f;
+  --sf-primary-strong: #0f8e70;
+  --sf-danger: #f87171;
+  --sf-warn: #fbbf24;
+  --sf-info: #60a5fa;
+}
 
-    * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-    }
+html, body, [class*="css"] {
+  font-family: 'Inter', sans-serif;
+  color: var(--sf-text) !important;
+  line-height: 1.45;
+}
 
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        color: var(--text-primary);
-        background-color: var(--bg-primary);
-        font-size: 15px;
-        line-height: 1.6;
-    }
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stAppViewContainer"] section.main {
+  background: radial-gradient(circle at 10% 0%, #1a1e25 0%, #121417 45%, #0e1116 100%) !important;
+}
 
-    .block-container {
-        padding: 2rem 3rem;
-        max-width: 1600px;
-    }
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #171b21 0%, #13171d 100%) !important;
+  border-right: 1px solid var(--sf-border);
+  min-width: 370px !important;
+  max-width: 370px !important;
+}
 
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    [data-testid="stDecoration"] {display: none;}
-    header {background-color: transparent !important;}
+[data-testid="stSidebar"] * {
+  color: var(--sf-text) !important;
+}
 
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-        background: var(--bg-secondary);
-    }
-    ::-webkit-scrollbar-thumb {
-        background: var(--border-medium);
-        border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: var(--accent-secondary);
-    }
+[data-testid="stSidebar"] > div:first-child {
+  padding-top: 0.6rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
 
-    /* ========== SIDEBAR ========== */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f1419 0%, #0a0e1a 100%);
-        border-right: 1px solid var(--border-subtle);
-        box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
-    }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { background: transparent !important; }
 
-    section[data-testid="stSidebar"] > div {
-        padding-top: 1.5rem;
-    }
+.block-container {
+  max-width: 1200px;
+  padding-top: 0.95rem;
+  padding-bottom: 1.55rem;
+}
 
-    section[data-testid="stSidebar"] h3 {
-        font-size: 1.5rem;
-        font-weight: 800;
-        margin-bottom: 0.3rem;
-        background: var(--accent-gradient);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: -0.02em;
-    }
+h1, h2, h3, h4, h5, h6,
+p, label, span, li,
+.stMarkdown, .stCaption {
+  color: var(--sf-text) !important;
+}
 
-    section[data-testid="stSidebar"] .element-container:first-child + div p {
-        color: var(--text-tertiary);
-        font-size: 0.8rem;
-        margin-bottom: 1.5rem;
-    }
+a {
+  color: #8ab4ff !important;
+}
 
-    .stRadio > div {
-        background-color: var(--bg-tertiary);
-        border-radius: 12px;
-        padding: 0.5rem;
-        border: 1px solid var(--border-subtle);
-    }
+.sf-brand {
+  border: 1px solid var(--sf-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.75rem 0.8rem;
+  margin-bottom: 0.7rem;
+}
 
-    .stRadio > div > label {
-        background-color: transparent !important;
-        border-radius: 8px;
-        padding: 0.6rem 1rem !important;
-        margin: 0 !important;
-        transition: all 0.2s ease;
-        color: var(--text-secondary) !important;
-        font-weight: 500;
-        font-size: 0.9rem;
-    }
+.sf-brand h3 {
+  margin: 0;
+  font-size: 1.04rem;
+  font-weight: 700;
+}
 
-    .stRadio > div > label:hover {
-        background-color: var(--bg-card-hover) !important;
-        color: var(--text-primary) !important;
-    }
+.sf-brand p {
+  margin: 0.22rem 0 0;
+  color: var(--sf-muted) !important;
+  font-size: 0.81rem;
+}
 
-    .stRadio > div > label[data-selected="true"] {
-        background: var(--accent-gradient) !important;
-        color: white !important;
-        box-shadow: var(--shadow-glow);
-    }
+.sf-side-card {
+  border: 1px solid var(--sf-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.76rem 0.8rem;
+  margin-bottom: 0.62rem;
+}
 
-    section[data-testid="stSidebar"] hr {
-        border: none;
-        height: 1px;
-        background: var(--border-subtle);
-        margin: 1.5rem 0;
-    }
+.sf-side-title {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8ab4ff !important;
+  font-weight: 700;
+  margin-bottom: 0.56rem;
+}
 
-    /* Base button styling */
-    .stButton > button {
-        width: 100%;
-        border-radius: 10px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        font-weight: 500;
-        font-size: 0.9rem;
-        padding: 0.6rem 1.0rem;
-        transition: all 0.2s ease;
-        box-shadow: none;
-    }
+.sf-side-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.8rem;
+  margin-bottom: 0.34rem;
+}
 
-    .primary-action button {
-        width: 100%;
-        border-radius: 14px !important;
-        background: var(--accent-gradient) !important;
-        border: none !important;
-        color: white !important;
-        font-weight: 600 !important;
-        font-size: 0.95rem !important;
-        padding: 0.75rem 1.3rem !important;
-        transition: all 0.25s ease !important;
-        box-shadow: var(--shadow-md), var(--shadow-glow);
-        letter-spacing: 0.01em;
-    }
+.sf-side-key {
+  color: var(--sf-muted) !important;
+  font-size: 0.8rem;
+}
 
-    .primary-action button:hover {
-        transform: translateY(-1px);
-        box-shadow: var(--shadow-lg), var(--shadow-glow);
-    }
+.sf-side-val {
+  color: var(--sf-text) !important;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
 
-    .sidebar-btn button {
-        all: unset;
-        display: block;
-        width: 100%;
-        box-sizing: border-box;
-        padding: 0.75rem 1rem;
-        border-radius: 12px;
-        background: #020617;
-        border: 1px solid var(--border-subtle);
-        color: var(--text-primary);
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 0.9rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
-    }
+.sf-side-muted {
+  color: var(--sf-muted) !important;
+  font-size: 0.78rem;
+}
 
-    .sidebar-btn button:hover {
-        background: var(--bg-card-hover);
-        border-color: var(--accent-secondary);
-        transform: translateY(-1px);
-    }
+.sf-side-query {
+  border-left: 2px solid var(--sf-border);
+  padding-left: 0.55rem;
+  margin-bottom: 0.42rem;
+  color: var(--sf-muted) !important;
+  font-size: 0.79rem;
+}
 
-    .history-header {
-        color: var(--text-tertiary);
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        margin: 1.5rem 0 0.8rem 0.3rem;
-    }
+.sf-side-stack {
+  border: 1px solid var(--sf-border);
+  border-radius: 12px;
+  background: #181d25;
+  padding: 0.55rem 0.6rem;
+  margin-bottom: 0.52rem;
+}
 
-    /* ========== MAIN CONTENT ========== */
-    .section-title {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 0.4rem;
-        letter-spacing: -0.03em;
-        background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-secondary) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
+.sf-side-item {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.015);
+  padding: 0.44rem 0.5rem;
+  margin-bottom: 0.42rem;
+}
 
-    .section-subtitle {
-        font-size: 1rem;
-        color: var(--text-secondary);
-        margin-bottom: 2rem;
-        line-height: 1.5;
-    }
+.sf-side-item:last-child {
+  margin-bottom: 0;
+}
 
-    .stChatMessage {
-        background-color: transparent !important;
-        padding: 1.5rem 0 !important;
-    }
+.sf-side-tag {
+  display: inline-block;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #93c5fd !important;
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
 
-    [data-testid="stChatMessageContent"] {
-        background-color: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-        padding: 1.2rem 1.5rem;
-        box-shadow: var(--shadow-sm);
-    }
+.sf-side-item-text {
+  color: var(--sf-text) !important;
+  font-size: 0.78rem;
+  line-height: 1.38;
+}
 
-    [data-testid="stChatMessageContent"] p {
-        margin-bottom: 0.8rem;
-        line-height: 1.7;
-    }
+.sf-side-dim {
+  color: var(--sf-muted) !important;
+  font-size: 0.72rem;
+}
 
-    .stChatInput {
-        border-top: 1px solid var(--border-subtle);
-        padding-top: 1.5rem;
-        background: linear-gradient(180deg, transparent 0%, var(--bg-primary) 20%);
-    }
+.sf-guide {
+  border: 1px solid rgba(16, 163, 127, 0.42);
+  border-radius: 12px;
+  background: rgba(16, 163, 127, 0.08);
+  border-left: 4px solid rgba(16, 163, 127, 0.95);
+  padding: 0.8rem 0.84rem;
+  margin: 0.22rem 0 0.92rem;
+}
 
-    .stChatInput > div > div {
-        background-color: var(--bg-card) !important;
-        border: 1px solid var(--border-medium) !important;
-        border-radius: 16px !important;
-        box-shadow: var(--shadow-md);
-    }
+.sf-guide strong {
+  color: #d1fae5 !important;
+}
 
-    .stChatInput textarea {
-        background-color: transparent !important;
-        color: var(--text-primary) !important;
-        font-size: 0.95rem !important;
-        padding: 0.9rem 1.2rem !important;
-    }
+.sf-guide p {
+  margin: 0.24rem 0 0;
+  color: var(--sf-text-soft) !important;
+  font-size: 0.86rem;
+  line-height: 1.48;
+}
 
-    .stChatInput textarea::placeholder {
-        color: var(--text-tertiary) !important;
-    }
+.sf-top {
+  border: 1px solid var(--sf-border);
+  border-radius: 14px;
+  background: linear-gradient(130deg, #1b2028 0%, #171c24 70%, #161b22 100%);
+  padding: 1.02rem 1.08rem;
+  margin-bottom: 0.9rem;
+}
 
-    .stChatInput button {
-        background: var(--accent-gradient) !important;
-        border: none !important;
-        border-radius: 12px !important;
-        padding: 0.6rem !important;
-        transition: all 0.2s ease !important;
-    }
+.sf-top-title {
+  margin: 0;
+  font-size: 1.52rem;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
 
-    .stChatInput button:hover {
-        transform: scale(1.05);
-        box-shadow: var(--shadow-glow);
-    }
+.sf-top-sub {
+  margin-top: 0.34rem;
+  color: var(--sf-muted) !important;
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
 
-    .meta-section-title {
-        font-size: 1.3rem;
-        font-weight: 700;
-        margin-bottom: 1.2rem;
-        color: var(--text-primary);
-        letter-spacing: -0.02em;
-    }
+.sf-inline {
+  display: flex;
+  gap: 0.42rem;
+  flex-wrap: wrap;
+  margin-top: 0.62rem;
+}
 
-    .meta-card {
-        background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-tertiary) 100%);
-        border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-        padding: 1.2rem 1.4rem;
-        margin-bottom: 1rem;
-        transition: all 0.3s ease;
-        box-shadow: var(--shadow-sm);
-    }
+.sf-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.2rem 0.58rem;
+  font-size: 0.69rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
 
-    .meta-card:hover {
-        border-color: var(--border-medium);
-        box-shadow: var(--shadow-md);
-        transform: translateY(-2px);
-    }
+.sf-badge-neutral {
+  color: #cbd5e1 !important;
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(148, 163, 184, 0.28);
+}
 
-    .meta-label {
-        color: var(--accent-secondary);
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        margin-bottom: 0.6rem;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-    }
+.sf-badge-ok {
+  color: #86efac !important;
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.35);
+}
 
-    .meta-label::before {
-        content: "●";
-        color: var(--accent-primary);
-        font-size: 0.6rem;
-    }
+.sf-badge-warn {
+  color: #fde68a !important;
+  background: rgba(234, 179, 8, 0.13);
+  border-color: rgba(234, 179, 8, 0.32);
+}
 
-    .meta-content {
-        color: var(--text-primary);
-        font-size: 0.9rem;
-        line-height: 1.6;
-        white-space: pre-wrap;
-    }
+.sf-badge-danger {
+  color: #fca5a5 !important;
+  background: rgba(239, 68, 68, 0.13);
+  border-color: rgba(239, 68, 68, 0.3);
+}
 
-    .status-badge {
-        display: inline-block;
-        padding: 0.3rem 0.8rem;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
+.sf-panel {
+  border: 1px solid var(--sf-border);
+  border-radius: 12px;
+  background: var(--sf-bg-elev);
+  padding: 0.9rem;
+}
 
-    .status-running {
-        background: rgba(16, 185, 129, 0.15);
-        color: var(--success);
-        border: 1px solid rgba(16, 185, 129, 0.3);
-    }
+.sf-panel-title {
+  font-size: 1.03rem;
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
 
-    .status-finished {
-        background: rgba(167, 139, 250, 0.15);
-        color: var(--accent-secondary);
-        border: 1px solid rgba(167, 139, 250, 0.3);
-    }
+.sf-panel-sub {
+  color: var(--sf-muted) !important;
+  font-size: 0.87rem;
+  line-height: 1.46;
+}
 
-    .status-idle {
-        background: rgba(100, 116, 139, 0.15);
-        color: var(--text-tertiary);
-        border: 1px solid rgba(100, 116, 139, 0.3);
-    }
+.sf-metric {
+  border: 1px solid var(--sf-border);
+  border-radius: 10px;
+  background: #1a2029;
+  padding: 0.68rem 0.72rem;
+}
 
-    .upload-area {
-        border: 2px dashed var(--accent-primary);
-        padding: 3rem 2rem;
-        border-radius: 16px;
-        text-align: center;
-        background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-tertiary) 100%);
-        margin-bottom: 2rem;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
+.sf-metric-label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.66rem;
+  color: var(--sf-muted) !important;
+  font-weight: 700;
+}
 
-    .upload-area:hover {
-        border-color: var(--accent-secondary);
-        background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-card) 100%);
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-lg);
-    }
+.sf-metric-value {
+  margin-top: 0.16rem;
+  font-size: 1.12rem;
+  font-weight: 800;
+}
 
-    .upload-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-        color: var(--text-primary);
-    }
+.sf-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  color: #8ab4ff !important;
+  font-weight: 700;
+  margin: 0.18rem 0 0.5rem;
+}
 
-    .upload-description {
-        color: var(--text-secondary);
-        font-size: 0.95rem;
-        line-height: 1.5;
-    }
+.sf-mono {
+  font-family: 'IBM Plex Mono', monospace;
+}
 
-    .stFileUploader {
-        border: none !important;
-    }
+.stButton > button,
+.stDownloadButton > button {
+  border-radius: 10px;
+  border: 1px solid var(--sf-border);
+  background: #1b212a;
+  color: var(--sf-text);
+  font-weight: 600;
+  min-height: 2.36rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
 
-    [data-testid="stFileUploader"] section {
-        background-color: transparent !important;
-        border: none !important;
-    }
+.stButton > button:hover,
+.stDownloadButton > button:hover {
+  border-color: var(--sf-primary);
+  color: #ffffff;
+}
 
-    [data-testid="stFileUploader"] button {
-        background: var(--bg-tertiary) !important;
-        border: 1px solid var(--border-medium) !important;
-        color: var(--text-primary) !important;
-        border-radius: 10px !important;
-        padding: 0.7rem 1.5rem !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease !important;
-    }
+.stButton > button[kind="primary"] {
+  background: linear-gradient(130deg, var(--sf-primary) 0%, var(--sf-primary-strong) 100%);
+  color: #ffffff;
+  border: none;
+}
 
-    [data-testid="stFileUploader"] button:hover {
-        background: var(--bg-card-hover) !important;
-        border-color: var(--accent-primary) !important;
-    }
+.stButton > button[kind="primary"]:hover {
+  color: #ffffff;
+}
 
-    .stat-container {
-        background: var(--bg-card);
-        border: 1px solid var(--border-subtle);
-        border-radius: 12px;
-        padding: 1.5rem;
-        text-align: center;
-        transition: all 0.3s ease;
-    }
+[data-testid="stChatMessage"] {
+  border: 1px solid var(--sf-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.68rem 0.78rem;
+  margin-bottom: 0.34rem;
+}
 
-    .stat-container:hover {
-        border-color: var(--accent-primary);
-        box-shadow: var(--shadow-md);
-        transform: translateY(-2px);
-    }
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] li,
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] span {
+  color: var(--sf-text) !important;
+}
 
-    .stat-label {
-        color: var(--text-secondary);
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.5rem;
-    }
+[data-testid="stChatInput"] {
+  border-top: 1px solid var(--sf-border);
+  padding-top: 0.88rem;
+  margin-top: 0.34rem;
+}
 
-    .stat-value {
-        color: var(--accent-secondary);
-        font-size: 2rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-    }
+.stTextInput input,
+.stTextArea textarea,
+.stNumberInput input {
+  color: var(--sf-text) !important;
+  border-color: var(--sf-border) !important;
+  background: #181d25 !important;
+}
 
-    .info-box {
-        background: linear-gradient(135deg, rgba(124, 58, 237, 0.08) 0%, rgba(167, 139, 250, 0.08) 100%);
-        border: 1px solid rgba(124, 58, 237, 0.2);
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-top: 1rem;
-    }
+.stDataFrame, .stTable {
+  border: 1px solid var(--sf-border);
+  border-radius: 10px;
+}
 
-    .info-box h4 {
-        color: var(--accent-secondary);
-        font-size: 1rem;
-        font-weight: 600;
-        margin-bottom: 0.8rem;
-    }
+.stTabs [role="tablist"] {
+  gap: 0.45rem;
+}
 
-    .info-box ul {
-        margin: 0;
-        padding-left: 1.2rem;
-        color: var(--text-secondary);
-    }
+.stTabs [role="tab"] {
+  border: 1px solid var(--sf-border);
+  border-radius: 10px;
+  background: #1a2029;
+  height: 2.18rem;
+  font-size: 0.86rem;
+}
 
-    .info-box li {
-        margin-bottom: 0.5rem;
-        line-height: 1.6;
-    }
+.stTabs [role="tab"][aria-selected="true"] {
+  border-color: var(--sf-primary);
+  color: #d1fae5 !important;
+}
 
-    @media (max-width: 768px) {
-        .block-container {
-            padding: 1rem 1.5rem;
-        }
+@media (max-width: 1250px) {
+  [data-testid="stSidebar"] {
+    min-width: 320px !important;
+    max-width: 320px !important;
+  }
+}
 
-        .section-title {
-            font-size: 1.5rem;
-        }
+@media (max-width: 920px) {
+  .sf-top-title {
+    font-size: 1.3rem;
+  }
 
-        .meta-card {
-            padding: 1rem;
-        }
-    }
+  [data-testid="stSidebar"] {
+    min-width: auto !important;
+    max-width: none !important;
+  }
+}
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# ----------------------------------------------------------
-# 3. STATE MANAGEMENT
-# ----------------------------------------------------------
+
+def _safe(value: Any) -> str:
+    return escape(str(value))
+
+
+def badge(text: str, tone: str = "neutral") -> str:
+    cls = {
+        "ok": "sf-badge-ok",
+        "warn": "sf-badge-warn",
+        "danger": "sf-badge-danger",
+        "neutral": "sf-badge-neutral",
+    }.get(tone, "sf-badge-neutral")
+    return f'<span class="sf-badge {cls}">{_safe(text)}</span>'
+
+
+def panel(title: str, subtitle: str = "") -> None:
+    st.markdown(
+        f"""
+<div class="sf-panel">
+  <div class="sf-panel-title">{_safe(title)}</div>
+  <div class="sf-panel-sub">{_safe(subtitle)}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def metric(label: str, value: Any) -> None:
+    st.markdown(
+        f"""
+<div class="sf-metric">
+  <div class="sf-metric-label">{_safe(label)}</div>
+  <div class="sf-metric-value">{_safe(value)}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+# -----------------------------------------------------------------------------
+# State
+# -----------------------------------------------------------------------------
+if "backend_url" not in st.session_state:
+    st.session_state.backend_url = DEFAULT_BACKEND_URL
+if "admin_token" not in st.session_state:
+    st.session_state.admin_token = DEFAULT_ADMIN_TOKEN
+if "page_mode" not in st.session_state:
+    st.session_state.page_mode = "Getting Started"
 if "conversations" not in st.session_state:
     st.session_state.conversations = []
 if "active_chat_id" not in st.session_state:
     st.session_state.active_chat_id = None
 if "working_messages" not in st.session_state:
     st.session_state.working_messages = []
-if "page_mode" not in st.session_state:
-    st.session_state.page_mode = "Research Agent"
+if "run_mode" not in st.session_state:
+    st.session_state.run_mode = "balanced"
+if "run_max_plan_queries" not in st.session_state:
+    st.session_state.run_max_plan_queries = 3
+if "run_max_citations" not in st.session_state:
+    st.session_state.run_max_citations = 9
+if "run_score_threshold" not in st.session_state:
+    st.session_state.run_score_threshold = 0.0
+if "run_include_graph" not in st.session_state:
+    st.session_state.run_include_graph = True
+if "run_include_diagnostics" not in st.session_state:
+    st.session_state.run_include_diagnostics = True
+if "studio_retrieve_result" not in st.session_state:
+    st.session_state.studio_retrieve_result = None
+if "studio_eval_result" not in st.session_state:
+    st.session_state.studio_eval_result = None
+if "studio_compare_result" not in st.session_state:
+    st.session_state.studio_compare_result = None
+if "_http_get_cache" not in st.session_state:
+    st.session_state._http_get_cache = {}
+if "kb_view" not in st.session_state:
+    st.session_state.kb_view = "Upload documents"
+if "admin_view" not in st.session_state:
+    st.session_state.admin_view = "Operations"
+
+if st.session_state.page_mode not in set(PAGES):
+    st.session_state.page_mode = "Getting Started"
 
 
-def get_active_conversation():
+# -----------------------------------------------------------------------------
+# API
+# -----------------------------------------------------------------------------
+def _base_url() -> str:
+    return st.session_state.backend_url.rstrip("/")
+
+
+def _admin_headers() -> Dict[str, str]:
+    token = (st.session_state.admin_token or "").strip()
+    return {"x-admin-token": token} if token else {}
+
+
+def api_request(
+    method: str,
+    path: str,
+    timeout: int = 20,
+    use_admin_token: bool = False,
+    **kwargs,
+) -> Tuple[bool, Any, str, int]:
+    url = f"{_base_url()}{path}"
+    headers = kwargs.pop("headers", {}) or {}
+    if use_admin_token:
+        headers.update(_admin_headers())
+
+    try:
+        response = requests.request(
+            method=method,
+            url=url,
+            timeout=timeout,
+            headers=headers,
+            **kwargs,
+        )
+    except requests.exceptions.Timeout:
+        return False, None, "Request timed out", 0
+    except requests.exceptions.ConnectionError:
+        return False, None, f"Cannot connect to backend at {_base_url()}", 0
+    except Exception as e:
+        return False, None, str(e), 0
+
+    try:
+        body = response.json()
+    except Exception:
+        body = response.text
+
+    if response.status_code >= 400:
+        detail = body.get("detail") if isinstance(body, dict) else str(body)
+        return False, body, f"HTTP {response.status_code}: {detail}", response.status_code
+
+    return True, body, "ok", response.status_code
+
+
+def clear_get_cache() -> None:
+    st.session_state._http_get_cache = {}
+
+
+def cached_get(
+    path: str,
+    timeout: int = 10,
+    use_admin_token: bool = False,
+    ttl_sec: int = 12,
+    force: bool = False,
+) -> Tuple[bool, Any, str, int]:
+    now = time.time()
+    token_part = (st.session_state.admin_token or "").strip() if use_admin_token else ""
+    cache_key = f"{_base_url()}|{path}|{int(use_admin_token)}|{token_part}"
+    cache = st.session_state._http_get_cache
+
+    if not force and cache_key in cache:
+        entry = cache.get(cache_key, {})
+        age = now - float(entry.get("ts", 0))
+        if age <= ttl_sec:
+            return (
+                bool(entry.get("ok", False)),
+                entry.get("payload"),
+                str(entry.get("err", "ok")),
+                int(entry.get("code", 0) or 0),
+            )
+
+    ok, payload, err, code = api_request(
+        "GET",
+        path,
+        timeout=timeout,
+        use_admin_token=use_admin_token,
+    )
+    cache[cache_key] = {
+        "ts": now,
+        "ok": ok,
+        "payload": payload,
+        "err": err,
+        "code": code,
+    }
+    st.session_state._http_get_cache = cache
+    return ok, payload, err, code
+
+
+# -----------------------------------------------------------------------------
+# Conversation
+# -----------------------------------------------------------------------------
+def get_active_conversation() -> Dict[str, Any] | None:
     cid = st.session_state.active_chat_id
     if cid is None:
         return None
@@ -519,817 +649,1066 @@ def get_active_conversation():
     return None
 
 
-def handle_user_query(prompt: str):
-    """Shared logic for chat input and quick prompts."""
-    if not prompt or not prompt.strip():
+def start_new_chat() -> None:
+    st.session_state.active_chat_id = None
+    st.session_state.working_messages = []
+
+
+def persist_chat(title_hint: str) -> None:
+    snapshot = [dict(m) for m in st.session_state.working_messages]
+    active = get_active_conversation()
+
+    if active is None:
+        next_id = max((c["id"] for c in st.session_state.conversations), default=0) + 1
+        st.session_state.conversations.append(
+            {
+                "id": next_id,
+                "title": title_hint[:64],
+                "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "messages": snapshot,
+            }
+        )
+        st.session_state.active_chat_id = next_id
+    else:
+        active["messages"] = snapshot
+
+
+def run_query(prompt: str) -> None:
+    prompt = (prompt or "").strip()
+    if not prompt:
         return
 
+    st.session_state.working_messages.append({"role": "user", "content": prompt})
+
+    with st.spinner("Generating response..."):
+        ok, payload, err, _ = api_request(
+            "POST",
+            "/generate",
+            timeout=180,
+            json={
+                "topic": prompt,
+                "mode": st.session_state.run_mode,
+                "max_plan_queries": int(st.session_state.run_max_plan_queries),
+                "max_citations": int(st.session_state.run_max_citations),
+                "score_threshold": float(st.session_state.run_score_threshold),
+                "include_graph": bool(st.session_state.run_include_graph),
+                "include_diagnostics": bool(st.session_state.run_include_diagnostics),
+            },
+        )
+
+    if not ok:
+        st.session_state.working_messages.append(
+            {"role": "assistant", "content": f"Request failed: {err}"}
+        )
+        persist_chat(prompt)
+        st.rerun()
+        return
+
+    review = payload.get("review", "") if isinstance(payload, dict) else ""
+    queries = payload.get("queries", []) if isinstance(payload, dict) else []
+    critique = payload.get("critique", "") if isinstance(payload, dict) else ""
+    stats = payload.get("stats", {}) if isinstance(payload, dict) else {}
+    citations = payload.get("citations", []) if isinstance(payload, dict) else []
+    diagnostics = payload.get("diagnostics", {}) if isinstance(payload, dict) else {}
+    mode = payload.get("mode", st.session_state.run_mode) if isinstance(payload, dict) else st.session_state.run_mode
+
     st.session_state.working_messages.append(
-        {"role": "user", "content": prompt}
+        {
+            "role": "assistant",
+            "content": review or "No response generated.",
+            "queries": queries,
+            "critique": critique,
+            "stats": stats,
+            "citations": citations,
+            "diagnostics": diagnostics,
+            "mode": mode,
+        }
     )
 
-    try:
-        with st.spinner(
-            "Research agents at work: planning, retrieving, and synthesizing..."
-        ):
-            response = requests.post(
-                f"{BACKEND_URL}/generate",
-                json={"topic": prompt},
-                timeout=180,
-            )
-
-        if response.status_code != 200:
-            error_msg = (
-                f"⚠️ Backend error (HTTP {response.status_code}). Please try again."
-            )
-            st.session_state.working_messages.append(
-                {"role": "assistant", "content": error_msg}
-            )
-        else:
-            data = response.json()
-            review = data.get("review", "")
-            queries = data.get("queries", [])
-            critique = data.get("critique", "")
-            stats = data.get("stats", {}) or {}
-            citations = data.get("citations", []) or []
-
-            st.session_state.working_messages.append(
-                {
-                    "role": "assistant",
-                    "content": review,
-                    "queries": queries,
-                    "critique": critique,
-                    "stats": stats,
-                    "citations": citations,
-                }
-            )
-
-            active_conv = get_active_conversation()
-            if active_conv is None:
-                new_id = (
-                    max([c["id"] for c in st.session_state.conversations]) + 1
-                    if st.session_state.conversations
-                    else 1
-                )
-                st.session_state.conversations.append(
-                    {
-                        "id": new_id,
-                        "title": prompt[:50],
-                        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "messages": st.session_state.working_messages,
-                    }
-                )
-                st.session_state.active_chat_id = new_id
-            else:
-                active_conv["messages"] = st.session_state.working_messages
-
-    except requests.exceptions.Timeout:
-        st.session_state.working_messages.append(
-            {
-                "role": "assistant",
-                "content": "⏱️ Request timed out. The query may be too complex. Please try again.",
-            }
-        )
-    except requests.exceptions.ConnectionError:
-        st.session_state.working_messages.append(
-            {
-                "role": "assistant",
-                "content": f"🔌 Cannot connect to backend server. "
-                           f"Please ensure the API is reachable at {BACKEND_URL}",
-            }
-        )
-    except Exception as e:
-        st.session_state.working_messages.append(
-            {"role": "assistant", "content": f"❌ Unexpected error: {str(e)}"}
-        )
-
+    persist_chat(prompt)
     st.rerun()
 
 
-# ----------------------------------------------------------
-# 4. SIDEBAR
-# ----------------------------------------------------------
 with st.sidebar:
-    st.markdown("### ScholarFlow")
-    st.caption("Autonomous research workspace powered by AI")
-
-    selected_mode = st.radio(
-        "Workspace",
-        ["Research Agent", "Knowledge Base", "Admin"],
-        index=["Research Agent", "Knowledge Base", "Admin"].index(
-            st.session_state.page_mode
-        ),
-        label_visibility="collapsed",
+    st.markdown(
+        """
+<div class="sf-brand">
+  <h3>ScholarFlow</h3>
+  <p>Production RAG workspace</p>
+</div>
+""",
+        unsafe_allow_html=True,
     )
-    st.session_state.page_mode = selected_mode
 
-    st.markdown("---")
+    st.markdown(
+        """
+<div class="sf-guide">
+  <strong>Recommended flow</strong>
+  <p>1) Start Here -> 2) Knowledge Base -> 3) Research Chat -> 4) RAG Studio -> 5) Admin</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("<div class='primary-action'>", unsafe_allow_html=True)
-    if st.button("New conversation", use_container_width=True, key="new_conversation"):
-        st.session_state.active_chat_id = None
-        st.session_state.working_messages = []
-        st.session_state.page_mode = "Research Agent"
+    if st.button("1) Start Here", use_container_width=True, key="goto_start_here"):
+        st.session_state.page_mode = "Getting Started"
         st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+    if st.button("2) Knowledge Base", use_container_width=True, key="goto_kb"):
+        st.session_state.page_mode = "Knowledge Base"
+        st.rerun()
+    if st.button("3) Research Chat", use_container_width=True, key="goto_research"):
+        st.session_state.page_mode = "Research"
+        st.rerun()
+    if st.button("4) RAG Studio", use_container_width=True, key="goto_studio"):
+        st.session_state.page_mode = "RAG Studio"
+        st.rerun()
+    if st.button("5) Admin", use_container_width=True, key="goto_admin"):
+        st.session_state.page_mode = "Admin"
+        st.rerun()
 
-    st.markdown(
-        '<div class="history-header">RECENT CONVERSATIONS</div>',
-        unsafe_allow_html=True,
-    )
+    st.caption(PAGE_META.get(st.session_state.page_mode, {}).get("subtitle", ""))
 
-    if not st.session_state.conversations:
-        st.caption("No conversations yet. Start one to begin.")
-    else:
-        for conv in reversed(st.session_state.conversations):
-            label = conv["title"][:32] + ("…" if len(conv["title"]) > 32 else "")
-            key = f"conv_{conv['id']}"
-
-            with st.container():
-                st.markdown("<div class='sidebar-btn'>", unsafe_allow_html=True)
-                if st.button(label, key=key, use_container_width=True):
-                    st.session_state.active_chat_id = conv["id"]
-                    st.session_state.working_messages = conv["messages"]
-                    st.session_state.page_mode = "Research Agent"
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-
-# ----------------------------------------------------------
-# 5. MAIN CONTENT
-# ----------------------------------------------------------
-
-# ==========================================================
-# VIEW 1: RESEARCH AGENT
-# ==========================================================
-if st.session_state.page_mode == "Research Agent":
-    st.markdown(
-        '<div class="section-title">Research Agent</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="section-subtitle">Ask research questions and get comprehensive, citation-backed answers powered by autonomous agents.</div>',
-        unsafe_allow_html=True,
-    )
-
-    col_main, col_meta = st.columns([2.8, 1.2], gap="large")
-
-    with col_main:
-        messages = st.session_state.working_messages
-
-        if not messages:
-            st.markdown("### Quick prompts")
-
-            qcol1, qcol2 = st.columns(2, gap="medium")
-
-            with qcol1:
-                if st.button(
-                    "Compare Qdrant, Pinecone, and Weaviate for RAG workloads",
-                    use_container_width=True,
-                ):
-                    handle_user_query(
-                        "Compare Qdrant, Pinecone, and Weaviate as vector databases for RAG workloads. Cover indexing, filtering, scalability, and cost trade-offs."
-                    )
-
-                if st.button(
-                    "Design a RAG pipeline for long legal documents",
-                    use_container_width=True,
-                ):
-                    handle_user_query(
-                        "Design a retrieval-augmented generation (RAG) pipeline for long legal documents, including chunking strategy, embedding model choice, and vector database design."
-                    )
-
-            with qcol2:
-                if st.button(
-                    "How do we evaluate RAG systems?",
-                    use_container_width=True,
-                ):
-                    handle_user_query(
-                        "Explain how to evaluate retrieval-augmented generation systems, including retrieval metrics, generation metrics, and end-to-end evaluation strategies."
-                    )
-
-                if st.button(
-                    "Best practices for embeddings, chunking, and metadata",
-                    use_container_width=True,
-                ):
-                    handle_user_query(
-                        "Summarize best practices for embeddings, chunking, and metadata design when deploying a production RAG system."
-                    )
-
-        for msg in messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-                if (
-                    msg["role"] == "assistant"
-                    and msg.get("queries")
-                    and isinstance(msg.get("queries"), list)
-                ):
-                    with st.expander("View search queries used"):
-                        for i, query in enumerate(msg["queries"], 1):
-                            st.markdown(f"**{i}.** {query}")
-
-    with col_meta:
-        st.markdown(
-            '<div class="meta-section-title">Run Details</div>',
-            unsafe_allow_html=True,
-        )
-
-        last_assistant = None
-        for msg in reversed(st.session_state.working_messages):
-            if msg["role"] == "assistant":
-                last_assistant = msg
-                break
-
-        if last_assistant is None:
-            st.markdown(
-                """
-                <div class="meta-card">
-                    <div class="meta-label">Status</div>
-                    <div class="meta-content">
-                        <span class="status-badge status-idle">Idle</span>
-                        <p style="margin-top: 0.8rem; color: var(--text-secondary); font-size: 0.85rem;">
-                            No active research session. Submit a query to begin.
-                        </p>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        else:
-            first_user = next(
-                (
-                    m
-                    for m in st.session_state.working_messages
-                    if m["role"] == "user"
-                ),
-                None,
-            )
-            query_text = first_user["content"] if first_user else "Current query"
-
-            st.markdown(
-                f"""
-                <div class="meta-card">
-                    <div class="meta-label">Research Query</div>
-                    <div class="meta-content">{query_text}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            queries = last_assistant.get("queries") or []
-            if queries:
-                queries_html = "<br>".join(
-                    f"<span style='color: var(--accent-secondary);'>•</span> {q}"
-                    for q in queries
-                )
-            else:
-                queries_html = "<em>No structured search plan available</em>"
-
-            st.markdown(
-                f"""
-                <div class="meta-card">
-                    <div class="meta-label">Search Strategy</div>
-                    <div class="meta-content">{queries_html}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            critique = (last_assistant.get("critique") or "").strip()
-            if not critique:
-                critique = "<em>No quality review available for this response</em>"
-
-            st.markdown(
-                f"""
-                <div class="meta-card">
-                    <div class="meta-label">Quality Review</div>
-                    <div class="meta-content">{critique}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            stats = last_assistant.get("stats") or {}
-            llm_tokens = int(stats.get("llm_tokens", 0) or 0)
-            retrieved_tokens = int(stats.get("retrieved_tokens", 0) or 0)
-            total_tokens = llm_tokens + retrieved_tokens
-
-            if total_tokens > 0:
-                llm_pct = int(round(llm_tokens / total_tokens * 100))
-                retrieved_pct = 100 - llm_pct
-
-                st.markdown(
-                    f"""
-                    <div class="meta-card">
-                        <div class="meta-label">Content Mix</div>
-                        <div class="meta-content">
-                            <strong>LLM tokens:</strong> {llm_tokens} ({llm_pct}%)<br>
-                            <strong>Retrieved tokens:</strong> {retrieved_tokens} ({retrieved_pct}%)
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-            citations = last_assistant.get("citations") or []
-            citations_items = ""
-            for c in citations:
-                title = c.get("title", "Source")
-                url = c.get("url", "")
-                snippet = c.get("snippet", "")
-
-                if url:
-                    link = f'<a href="{url}" target="_blank" style="color: var(--accent-secondary); text-decoration: none;">{title}</a>'
-                else:
-                    link = f'<span style="color: var(--accent-secondary);">{title}</span>'
-
-                citations_items += "<li>" + link
-                if snippet:
-                    citations_items += (
-                        "<br><span style='color: var(--text-secondary); "
-                        "font-size: 0.85rem;'>"
-                        + snippet
-                        + "</span>"
-                    )
-                citations_items += "</li>"
-
-            if not citations_items:
-                citations_items = (
-                    "<li><em>No references returned for this answer.</em></li>"
-                )
-
-            st.markdown(
-                f"""
-                <div class="meta-card">
-                    <div class="meta-label">References</div>
-                    <div class="meta-content">
-                        <ul style="padding-left: 1.1rem; margin: 0;">
-                            {citations_items}
-                        </ul>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            st.markdown(
-                """
-                <div class="meta-card">
-                    <div class="meta-label">Status</div>
-                    <div class="meta-content">
-                        <span class="status-badge status-finished">Completed</span>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    user_prompt = st.chat_input(
-        "Ask a research question or request clarification..."
-    )
-    if user_prompt:
-        handle_user_query(user_prompt)
-
-# ==========================================================
-# VIEW 2: KNOWLEDGE BASE
-# ==========================================================
-elif st.session_state.page_mode == "Knowledge Base":
-    st.markdown(
-        '<div class="section-title">Knowledge Base</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="section-subtitle">Upload and manage research papers to expand the corpus used for intelligent retrieval.</div>',
-        unsafe_allow_html=True,
-    )
-
-    col_upload, col_info = st.columns([2.2, 1.8], gap="large")
-
-    with col_upload:
-        st.markdown(
-            """
-            <div class="upload-area">
-                <div style="position: relative; z-index: 1;">
-                    <div class="upload-title">Upload research documents</div>
-                    <div class="upload-description">
-                        PDFs will be parsed, chunked, embedded with transformer models,
-                        and indexed in the vector database for semantic retrieval.
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        uploaded_file = st.file_uploader(
-            "Choose a PDF file",
-            type=["pdf"],
-            help="Upload academic papers, research articles, or technical documents",
-            label_visibility="collapsed",
-        )
-
-        if uploaded_file:
-            st.markdown(
-                f"""
-                <div class="info-box">
-                    <h4>Selected file</h4>
-                    <ul>
-                        <li><strong>Name:</strong> {uploaded_file.name}</li>
-                        <li><strong>Size:</strong> {uploaded_file.size / 1024:.1f} KB</li>
-                        <li><strong>Type:</strong> {uploaded_file.type}</li>
-                    </ul>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            col_btn1, col_btn2 = st.columns([1, 1])
-
-            with col_btn1:
-                if st.button(
-                    "Ingest document",
-                    use_container_width=True,
-                    type="primary",
-                ):
-                    with st.spinner(
-                        "Processing document... This may take a minute."
-                    ):
-                        try:
-                            files = {
-                                "file": (
-                                    uploaded_file.name,
-                                    uploaded_file.getvalue(),
-                                    "application/pdf",
-                                )
-                            }
-                            response = requests.post(
-                                f"{BACKEND_URL}/upload",
-                                files=files,
-                                timeout=120,
-                            )
-
-                            if response.status_code == 200:
-                                metadata = response.json()
-                                st.success(
-                                    f"✅ Successfully indexed: **{metadata.get('title', uploaded_file.name)}**"
-                                )
-                                st.balloons()
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error(
-                                    f"❌ Ingestion failed with status {response.status_code}"
-                                )
-
-                        except requests.exceptions.Timeout:
-                            st.error(
-                                "⏱️ Upload timed out. Try a smaller file or check server status."
-                            )
-                        except requests.exceptions.ConnectionError:
-                            st.error(
-                                f"🔌 Cannot connect to backend. Ensure the API server is reachable at {BACKEND_URL}."
-                            )
-                        except Exception as e:
-                            st.error(f"❌ Upload error: {str(e)}")
-
-            with col_btn2:
-                if st.button(
-                    "Clear selection", use_container_width=True
-                ):
-                    st.rerun()
-
-        try:
-            stats_response = requests.get(
-                f"{BACKEND_URL}/admin/stats", timeout=5
-            )
-            if stats_response.status_code == 200:
-                stats = stats_response.json()
-
-                st.markdown("---")
-                st.markdown("### Corpus statistics")
-
-                stat_cols = st.columns(3)
-
-                with stat_cols[0]:
-                    st.markdown(
-                        f"""
-                        <div class="stat-container">
-                            <div class="stat-label">Documents</div>
-                            <div class="stat-value">{stats.get('documents', 0)}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                with stat_cols[1]:
-                    st.markdown(
-                        f"""
-                        <div class="stat-container">
-                            <div class="stat-label">Passages</div>
-                            <div class="stat-value">{stats.get('passages', 0)}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-
-                with stat_cols[2]:
-                    st.markdown(
-                        f"""
-                        <div class="stat-container">
-                            <div class="stat-label">Embeddings</div>
-                            <div class="stat-value">{stats.get('embeddings', 0)}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-        except Exception:
-            pass
-
-    with col_info:
-        st.markdown("### How it works")
-
-        st.markdown(
-            """
-            <div class="info-box">
-                <h4>Document processing pipeline</h4>
-                <ul>
-                    <li><strong>Extraction:</strong> Text is extracted from PDF with metadata preservation.</li>
-                    <li><strong>Chunking:</strong> Content is split into semantic passages.</li>
-                    <li><strong>Embedding:</strong> Each passage is encoded using transformer models.</li>
-                    <li><strong>Indexing:</strong> Vectors are stored in Qdrant for fast similarity search.</li>
-                    <li><strong>Retrieval:</strong> Hybrid search finds relevant passages at query time.</li>
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown("### Best practices")
-
-        st.markdown(
-            """
-            <div class="info-box">
-                <ul>
-                    <li>Upload high-quality PDFs with selectable text (not scanned images).</li>
-                    <li>Include diverse papers to cover different perspectives.</li>
-                    <li>Use recent publications for cutting-edge research questions.</li>
-                    <li>Organize documents by topic for better retrieval accuracy.</li>
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-# ==========================================================
-# VIEW 3: ADMIN
-# ==========================================================
-elif st.session_state.page_mode == "Admin":
-    st.markdown(
-        '<div class="section-title">System Administration</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="section-subtitle">Monitor system health, manage background processes, and maintain the vector database.</div>',
-        unsafe_allow_html=True,
-    )
-
-    try:
-        status_response = requests.get(
-            f"{BACKEND_URL}/admin/migration_status", timeout=10
-        )
-        status = (
-            status_response.json()
-            if status_response.status_code == 200
-            else None
-        )
-    except Exception:
-        status = None
-
-    if status is None:
-        st.error(
-            f"🔌 Cannot connect to backend API. Please ensure the server is reachable at {BACKEND_URL}"
-        )
-        st.stop()
-
-    st.markdown("### System status")
-
-    status_cols = st.columns(4)
-
-    with status_cols[0]:
-        if status.get("running"):
-            badge_class = "status-running"
-            badge_text = "Running"
-            icon = "🟢"
-        elif status.get("finished"):
-            badge_class = "status-finished"
-            badge_text = "Finished"
-            icon = "🔵"
-        else:
-            badge_class = "status-idle"
-            badge_text = "Idle"
-            icon = "⚪"
-
-        st.markdown(
-            f"""
-            <div class="stat-container">
-                <div class="stat-label">Process state</div>
-                <div style="font-size: 2rem; margin: 0.5rem 0;">{icon}</div>
-                <span class="status-badge {badge_class}">{badge_text}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with status_cols[1]:
-        st.markdown(
-            f"""
-            <div class="stat-container">
-                <div class="stat-label">Migrated</div>
-                <div class="stat-value">{status.get('migrated', 0)}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with status_cols[2]:
-        st.markdown(
-            f"""
-            <div class="stat-container">
-                <div class="stat-label">Errors</div>
-                <div class="stat-value" style="color: {'var(--error)' if status.get('errors', 0) > 0 else 'var(--success)'};">
-                    {status.get('errors', 0)}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with status_cols[3]:
-        uptime = status.get("uptime", "N/A")
-        st.markdown(
-            f"""
-            <div class="stat-container">
-                <div class="stat-label">Uptime</div>
-                <div class="stat-value" style="font-size: 1.5rem;">{uptime}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    if st.button(
+        "New chat",
+        type="primary",
+        use_container_width=True,
+        help="Clears the current thread and starts a fresh chat.",
+    ):
+        start_new_chat()
+        st.session_state.page_mode = "Research"
+        st.rerun()
 
     st.markdown("---")
+    st.markdown("#### Conversation history")
+    history_filter = st.text_input(
+        "Find conversation",
+        value="",
+        placeholder="Filter by title",
+        key="history_filter_sidebar",
+    ).strip().lower()
 
-    col_maint, col_logs = st.columns([1.5, 1.5], gap="large")
+    history_rows = list(reversed(st.session_state.conversations))
+    if history_filter:
+        history_rows = [c for c in history_rows if history_filter in str(c.get("title", "")).lower()]
 
-    with col_maint:
-        st.markdown("### Database maintenance")
+    show_all_history = st.checkbox(
+        "Show full history",
+        value=False,
+        key="show_full_history_sidebar",
+    )
+    if not show_all_history and len(history_rows) > 30:
+        st.caption("Showing latest 30 conversations. Enable full history to view all.")
+        history_rows = history_rows[:30]
 
+    if not history_rows:
+        st.caption("No saved conversations.")
+    else:
+        conv_ids = [int(conv.get("id")) for conv in history_rows]
+        conv_lookup = {int(conv.get("id")): conv for conv in history_rows}
+
+        def _history_label(cid: int) -> str:
+            row = conv_lookup.get(cid, {})
+            title = str(row.get("title") or "Untitled")[:34]
+            turns = len(row.get("messages", []) or [])
+            created = str(row.get("created_at", "—"))
+            return f"{title} | {turns} turns | {created}"
+
+        selected_id = st.selectbox(
+            "Saved threads",
+            options=conv_ids,
+            format_func=_history_label,
+            key="selected_conv_sidebar",
+        )
+
+        selected_conv = conv_lookup.get(int(selected_id), {})
+        selected_msgs = selected_conv.get("messages", []) if isinstance(selected_conv, dict) else []
+        is_active = int(selected_id) == int(st.session_state.active_chat_id or -1)
         st.markdown(
-            """
-            <div class="info-box">
-                <h4>Warning</h4>
-                <ul>
-                    <li>Clearing the vector database will permanently delete all indexed documents and embeddings.</li>
-                    <li>This action cannot be undone.</li>
-                    <li>You will need to re-upload all documents after clearing.</li>
-                </ul>
-            </div>
-            """,
+            badge("Selected thread is active" if is_active else "Selected thread is saved", "ok" if is_active else "neutral"),
             unsafe_allow_html=True,
         )
+        if selected_msgs:
+            preview = str(selected_msgs[-1].get("content", "")).strip().replace("\n", " ")
+            st.caption(preview[:220] if preview else "No message preview available.")
 
-        confirm = st.checkbox(
-            "I understand the consequences of clearing the database"
+        if st.button("Open selected conversation", use_container_width=True):
+            st.session_state.active_chat_id = int(selected_id)
+            st.session_state.working_messages = [dict(m) for m in selected_msgs]
+            st.session_state.page_mode = "Research"
+            st.rerun()
+
+
+# -----------------------------------------------------------------------------
+# Global top shell
+# -----------------------------------------------------------------------------
+active_page = st.session_state.page_mode
+page_subtitle = PAGE_META.get(active_page, {}).get("subtitle", "")
+st.markdown(
+    f"""
+<div class="sf-top">
+  <h1 class="sf-top-title">ScholarFlow</h1>
+  <div class="sf-top-sub">{_safe(page_subtitle)}</div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f"""
+<div class="sf-inline">
+  {badge(f"Workspace: {PAGE_META.get(active_page, {}).get('label', active_page)}", "neutral")}
+  {badge("Theme: Dark", "neutral")}
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+st.markdown("---")
+
+
+# -----------------------------------------------------------------------------
+# Getting Started page
+# -----------------------------------------------------------------------------
+if st.session_state.page_mode == "Getting Started":
+    st.markdown('<div class="sf-kicker">Getting Started</div>', unsafe_allow_html=True)
+    panel(
+        "Welcome to ScholarFlow",
+        "Follow these steps to get value quickly.",
+    )
+
+    st.markdown(
+        """
+1. **Upload a PDF** in `Knowledge Base -> Upload Documents`.
+2. **Ask a question** in `Research Chat`.
+3. **Verify quality** in `RAG Studio`.
+4. Use **Admin** only for maintenance tasks.
+"""
+    )
+
+    st.markdown("### Quick actions")
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        if st.button("Go to Knowledge Base", use_container_width=True, key="start_go_kb"):
+            st.session_state.page_mode = "Knowledge Base"
+            st.rerun()
+    with s2:
+        if st.button("Go to Research Chat", use_container_width=True, key="start_go_research"):
+            st.session_state.page_mode = "Research"
+            st.rerun()
+    with s3:
+        if st.button("Go to RAG Studio", use_container_width=True, key="start_go_studio"):
+            st.session_state.page_mode = "RAG Studio"
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown("### What each section does")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(
+            """
+- **Research Chat**: Ask questions and get grounded answers with citations.
+- **Run Controls**: Tune speed vs depth (`fast`, `balanced`, `deep`).
+- **Response Details**: View planner queries, citations, diagnostics, and latency.
+"""
+        )
+    with c2:
+        st.markdown(
+            """
+- **RAG Studio**: Test retrieval quality and score answer grounding.
+- **Knowledge Base**: Upload PDFs that become your retrieval corpus.
+- **Admin**: Logs, maintenance, and operational diagnostics.
+"""
+        )
+
+
+# -----------------------------------------------------------------------------
+# Research page
+# -----------------------------------------------------------------------------
+elif st.session_state.page_mode == "Research":
+    st.markdown('<div class="sf-kicker">Research</div>', unsafe_allow_html=True)
+    st.caption("Ask a question, review evidence, and iterate.")
+
+    st.markdown(
+        """
+<div class="sf-guide">
+  <strong>How to use Research Chat</strong>
+  <p>Choose a preset, send your question, then open "How this answer was built" to review evidence and diagnostics.</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    p1, p2, p3 = st.columns(3)
+    with p1:
+        if st.button(
+            "Quick",
+            use_container_width=True,
+            key="preset_quick",
+            help="Fast response, lighter retrieval.",
+        ):
+            st.session_state.run_mode = "fast"
+            st.session_state.run_max_plan_queries = 2
+            st.session_state.run_max_citations = 6
+            st.session_state.run_score_threshold = 0.0
+    with p2:
+        if st.button(
+            "Balanced",
+            use_container_width=True,
+            key="preset_balanced",
+            help="Best default for most queries.",
+        ):
+            st.session_state.run_mode = "balanced"
+            st.session_state.run_max_plan_queries = 3
+            st.session_state.run_max_citations = 9
+            st.session_state.run_score_threshold = 0.0
+    with p3:
+        if st.button(
+            "Deep",
+            use_container_width=True,
+            key="preset_deep",
+            help="Broader retrieval and more evidence.",
+        ):
+            st.session_state.run_mode = "deep"
+            st.session_state.run_max_plan_queries = 5
+            st.session_state.run_max_citations = 14
+            st.session_state.run_score_threshold = 0.0
+
+    with st.expander("Advanced Controls", expanded=False):
+        st.caption(
+            "Mode sets speed vs depth. Planner queries set search breadth. "
+            "Citation budget sets evidence count. Threshold filters weak matches."
+        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.session_state.run_mode = st.selectbox(
+                "Mode",
+                ["fast", "balanced", "deep"],
+                index=["fast", "balanced", "deep"].index(st.session_state.run_mode)
+                if st.session_state.run_mode in {"fast", "balanced", "deep"}
+                else 1,
+                help="fast: quicker answers, deep: broader retrieval and heavier evidence.",
+                key="run_mode_select",
+            )
+        with c2:
+            st.session_state.run_max_plan_queries = st.slider(
+                "Planner queries",
+                min_value=1,
+                max_value=6,
+                value=int(st.session_state.run_max_plan_queries),
+                key="run_max_plan_slider",
+            )
+        with c3:
+            st.session_state.run_max_citations = st.slider(
+                "Citation budget",
+                min_value=3,
+                max_value=20,
+                value=int(st.session_state.run_max_citations),
+                key="run_max_citations_slider",
+            )
+
+        c4, c5 = st.columns(2)
+        with c4:
+            st.session_state.run_score_threshold = st.slider(
+                "Score threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=float(st.session_state.run_score_threshold),
+                step=0.01,
+                help="Filter out low-score retrieved chunks.",
+                key="run_threshold_slider",
+            )
+        with c5:
+            st.session_state.run_include_graph = st.checkbox(
+                "Include graph-linked sources",
+                value=bool(st.session_state.run_include_graph),
+                key="run_include_graph_checkbox",
+            )
+            st.session_state.run_include_diagnostics = st.checkbox(
+                "Return diagnostics",
+                value=bool(st.session_state.run_include_diagnostics),
+                help="Includes retrieval metadata in response details.",
+                key="run_include_diag_checkbox",
+            )
+
+    if not st.session_state.working_messages:
+        st.markdown("### What should we research?")
+        st.caption("Starter prompts below are examples. Click one to auto-run a full RAG response.")
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button(
+                "Compare vector databases for enterprise RAG",
+                use_container_width=True,
+                help="Compares Qdrant, Pinecone, and Weaviate from a production perspective.",
+            ):
+                run_query("Compare Qdrant, Pinecone, and Weaviate for enterprise RAG in production.")
+            if st.button(
+                "Design evaluation plan for RAG quality",
+                use_container_width=True,
+                help="Generates metrics and testing strategy for quality/reliability.",
+            ):
+                run_query("Design an end-to-end evaluation plan for RAG quality, reliability, and latency.")
+        with c2:
+            if st.button(
+                "Long-document architecture",
+                use_container_width=True,
+                help="Design guidance for legal/compliance long-context RAG.",
+            ):
+                run_query("Design a robust RAG architecture for long legal and compliance documents.")
+            if st.button(
+                "Metadata strategy",
+                use_container_width=True,
+                help="Explains metadata schema choices for retrieval quality.",
+            ):
+                run_query("What metadata schema improves retrieval precision and grounding quality?")
+        st.markdown("---")
+
+    for msg in st.session_state.working_messages:
+        role = msg.get("role", "assistant")
+        with st.chat_message(role):
+            st.markdown(msg.get("content", ""))
+
+            if role == "assistant" and any(
+                k in msg for k in ["queries", "critique", "stats", "citations", "diagnostics", "mode"]
+            ):
+                with st.expander("How this answer was built", expanded=False):
+                    run_mode = str(msg.get("mode", "balanced")).strip()
+                    st.markdown(f"**Run mode**: `{run_mode}`")
+
+                    queries = msg.get("queries") or []
+                    if queries:
+                        st.markdown("**Search plan**")
+                        for i, q in enumerate(queries, start=1):
+                            st.write(f"{i}. {q}")
+
+                    critique = (msg.get("critique") or "").strip()
+                    if critique:
+                        st.markdown("**Self-check**")
+                        st.write(critique)
+
+                    stats = msg.get("stats") or {}
+                    if stats:
+                        st.markdown("**Run metrics**")
+                        m1, m2, m3, m4 = st.columns(4)
+                        with m1:
+                            metric("LLM tokens", int(stats.get("llm_tokens", 0) or 0))
+                        with m2:
+                            metric("Retrieved", int(stats.get("retrieved_tokens", 0) or 0))
+                        with m3:
+                            metric("Citations", int(stats.get("citation_count", 0) or 0))
+                        with m4:
+                            metric("Latency ms", int(stats.get("latency_ms", 0) or 0))
+
+                    citations = msg.get("citations") or []
+                    if citations:
+                        st.markdown("**Evidence**")
+                        for c in citations[:12]:
+                            title = c.get("title", "Source")
+                            url = (c.get("url") or "").strip()
+                            snippet = (c.get("snippet") or "").strip()
+                            src = str(c.get("source", "Vector"))
+                            score = float(c.get("score", 0.0) or 0.0)
+                            if url:
+                                st.markdown(f"- [{title}]({url}) · `{src}` · score `{score:.3f}`")
+                            else:
+                                st.markdown(f"- {title} · `{src}` · score `{score:.3f}`")
+                            if snippet:
+                                st.caption(snippet[:240])
+
+                    diagnostics = msg.get("diagnostics") or {}
+                    if diagnostics:
+                        retrieval_meta = diagnostics.get("retrieval_meta", {})
+                        if retrieval_meta:
+                            st.markdown("**Retrieval details**")
+                            st.json(retrieval_meta)
+
+    prompt = st.chat_input("Message ScholarFlow")
+    if prompt:
+        run_query(prompt)
+
+
+# -----------------------------------------------------------------------------
+# RAG Studio page
+# -----------------------------------------------------------------------------
+elif st.session_state.page_mode == "RAG Studio":
+    st.markdown('<div class="sf-kicker">RAG Studio</div>', unsafe_allow_html=True)
+    panel("RAG quality workspace", "Run checks in order: retrieval -> answer score -> prompt comparison.")
+
+    st.markdown(
+        """
+<div class="sf-guide">
+  <strong>When to use this page</strong>
+  <p>After generating an answer in Research Chat, use this page to validate quality and improve prompts.</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    last_user_prompt = next(
+        (m.get("content", "") for m in reversed(st.session_state.working_messages) if m.get("role") == "user"),
+        "",
+    )
+    last_assistant_answer = next(
+        (m.get("content", "") for m in reversed(st.session_state.working_messages) if m.get("role") == "assistant"),
+        "",
+    )
+
+    t_retrieve, t_eval, t_arena = st.tabs(
+        ["1) Check Retrieval", "2) Score Answer", "3) Compare Prompts"]
+    )
+
+    with t_retrieve:
+        st.caption("Check which chunks were retrieved, with rank and score.")
+        rq = st.text_input(
+            "Query",
+            value=last_user_prompt[:260],
+            placeholder="Enter a retrieval query",
+            key="studio_retrieve_query",
+        )
+        rc1, rc2, rc3, rc4 = st.columns(4)
+        with rc1:
+            r_top_k = st.slider("Top K", 1, 30, 10, key="studio_retrieve_top_k")
+        with rc2:
+            r_threshold = st.slider("Threshold", 0.0, 1.0, 0.0, 0.01, key="studio_retrieve_threshold")
+        with rc3:
+            r_mode = st.selectbox(
+                "Mode",
+                ["focused", "balanced", "broad"],
+                index=1,
+                key="studio_retrieve_mode",
+            )
+        with rc4:
+            r_graph = st.checkbox("Include graph", value=True, key="studio_retrieve_graph")
+
+        if st.button(
+            "Run Retrieval Check",
+            type="primary",
+            use_container_width=True,
+            help="Calls /retrieve and returns ranked evidence chunks plus retrieval diagnostics.",
+        ):
+            with st.spinner("Running retrieval inspection..."):
+                ok, payload, err, _ = api_request(
+                    "POST",
+                    "/retrieve",
+                    timeout=45,
+                    json={
+                        "query": rq,
+                        "top_k": int(r_top_k),
+                        "score_threshold": float(r_threshold),
+                        "include_graph": bool(r_graph),
+                        "retrieval_mode": r_mode,
+                    },
+                )
+            if ok and isinstance(payload, dict):
+                st.session_state.studio_retrieve_result = payload
+            else:
+                st.session_state.studio_retrieve_result = {"error": err}
+
+        retrieve_result = st.session_state.studio_retrieve_result
+        if isinstance(retrieve_result, dict):
+            if retrieve_result.get("error"):
+                st.error(str(retrieve_result.get("error")))
+            else:
+                docs = retrieve_result.get("results") or []
+                diag = retrieve_result.get("diagnostics") or {}
+                st.markdown(
+                    f"""
+<div class="sf-inline">
+  {badge(f"Docs: {len(docs)}", "ok" if docs else "warn")}
+  {badge(f"Mode: {diag.get('mode', 'balanced')}", "neutral")}
+  {badge(f"Vector hits: {diag.get('vector_hits_after_filter', 0)}", "neutral")}
+</div>
+""",
+                    unsafe_allow_html=True,
+                )
+
+                if docs:
+                    rows = [
+                        {
+                            "rank": d.get("rank"),
+                            "source": d.get("source"),
+                            "score": round(float(d.get("score", 0.0) or 0.0), 4),
+                            "paper_id": d.get("paper_id"),
+                            "title": d.get("title"),
+                        }
+                        for d in docs
+                    ]
+                    st.dataframe(rows, use_container_width=True)
+                    for d in docs[:8]:
+                        with st.expander(
+                            f"#{d.get('rank', '?')} {d.get('title', 'Untitled')} ({d.get('source', 'Vector')})",
+                            expanded=False,
+                        ):
+                            st.write(f"Score: `{float(d.get('score', 0.0) or 0.0):.4f}`")
+                            st.write(f"Paper ID: `{d.get('paper_id', '')}`")
+                            st.caption(str(d.get("text", ""))[:1200])
+
+                with st.expander("Diagnostics JSON", expanded=False):
+                    st.json(diag)
+                with st.expander("Context preview", expanded=False):
+                    st.write(retrieve_result.get("context_preview", ""))
+
+    with t_eval:
+        st.caption("Score how well an answer is grounded in available context.")
+        eq = st.text_area(
+            "Question",
+            value=last_user_prompt[:1000],
+            placeholder="Question that the answer should satisfy",
+            key="studio_eval_question",
+            height=90,
+        )
+        ea = st.text_area(
+            "Answer to evaluate",
+            value=last_assistant_answer[:6000],
+            placeholder="Paste an answer here",
+            key="studio_eval_answer",
+            height=200,
+        )
+        ec = st.text_area(
+            "Context (optional)",
+            value="",
+            placeholder="Leave empty to auto-retrieve context for this question",
+            key="studio_eval_context",
+            height=130,
         )
 
         if st.button(
-            "Clear vector database",
+            "Run Answer Score",
+            type="primary",
             use_container_width=True,
-            disabled=not confirm,
-            type="primary" if confirm else "secondary",
+            help="Calls /evaluate and returns grounding/relevance metrics with suggestions.",
         ):
-            with st.spinner("Clearing vector database..."):
-                try:
-                    clear_response = requests.post(
-                        f"{BACKEND_URL}/admin/clear_vector_db",
-                        timeout=30,
+            with st.spinner("Evaluating answer quality..."):
+                ok, payload, err, _ = api_request(
+                    "POST",
+                    "/evaluate",
+                    timeout=60,
+                    json={
+                        "question": eq,
+                        "answer": ea,
+                        "context": ec,
+                    },
+                )
+            if ok and isinstance(payload, dict):
+                st.session_state.studio_eval_result = payload
+            else:
+                st.session_state.studio_eval_result = {"error": err}
+
+        eval_result = st.session_state.studio_eval_result
+        if isinstance(eval_result, dict):
+            if eval_result.get("error"):
+                st.error(str(eval_result.get("error")))
+            else:
+                metrics = eval_result.get("metrics") or {}
+                if metrics:
+                    e1, e2, e3, e4 = st.columns(4)
+                    with e1:
+                        metric("Overall score", metrics.get("overall_score", 0))
+                    with e2:
+                        metric("Grounding", metrics.get("grounding_coverage", 0))
+                    with e3:
+                        metric("Sentence ratio", metrics.get("grounded_sentence_ratio", 0))
+                    with e4:
+                        metric("Citations", metrics.get("citation_markers", 0))
+                    st.markdown(f"**Verdict**: `{metrics.get('verdict', 'unknown')}`")
+                    suggestions = metrics.get("suggestions") or []
+                    if suggestions:
+                        st.markdown("**Suggestions**")
+                        for s in suggestions:
+                            st.write(f"- {s}")
+
+                preview = eval_result.get("retrieval_preview") or []
+                if preview:
+                    st.markdown("**Auto-retrieved evidence preview**")
+                    st.dataframe(
+                        [
+                            {
+                                "rank": d.get("rank"),
+                                "source": d.get("source"),
+                                "score": round(float(d.get("score", 0.0) or 0.0), 4),
+                                "title": d.get("title"),
+                            }
+                            for d in preview
+                        ],
+                        use_container_width=True,
                     )
 
-                    if clear_response.status_code == 200:
-                        st.success(
-                            "✅ Vector database has been successfully cleared."
-                        )
-                        time.sleep(2)
-                        st.rerun()
-                    else:
-                        st.error(
-                            f"❌ Clear operation failed with status {clear_response.status_code}"
-                        )
-
-                except requests.exceptions.Timeout:
-                    st.error(
-                        "⏱️ Clear operation timed out. The database may be large."
-                    )
-                except requests.exceptions.ConnectionError:
-                    st.error(
-                        f"🔌 Cannot connect to backend server at {BACKEND_URL}."
-                    )
-                except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
-
-        st.markdown("### Background jobs")
+    with t_arena:
+        st.caption("Compare two prompt variants and review quality/latency tradeoffs.")
+        a1, a2 = st.columns(2)
+        with a1:
+            left_prompt = st.text_area(
+                "Prompt A",
+                value=last_user_prompt[:1000],
+                key="studio_arena_prompt_a",
+                height=140,
+            )
+            left_mode = st.selectbox(
+                "Mode A",
+                ["fast", "balanced", "deep"],
+                index=1,
+                key="studio_arena_mode_a",
+            )
+        with a2:
+            right_prompt = st.text_area(
+                "Prompt B",
+                value="",
+                placeholder="Alternative wording to compare",
+                key="studio_arena_prompt_b",
+                height=140,
+            )
+            right_mode = st.selectbox(
+                "Mode B",
+                ["fast", "balanced", "deep"],
+                index=2,
+                key="studio_arena_mode_b",
+            )
 
         if st.button(
-            "Restart migration process", use_container_width=True
+            "Compare Prompts",
+            type="primary",
+            use_container_width=True,
+            help="Runs two /generate calls side-by-side for prompt A/B comparison.",
         ):
-            try:
-                restart_response = requests.post(
-                    f"{BACKEND_URL}/admin/restart_migration",
-                    timeout=10,
-                )
-                if restart_response.status_code == 200:
-                    st.success("✅ Migration process restarted.")
-                    time.sleep(1)
+            if not left_prompt.strip() or not right_prompt.strip():
+                st.error("Provide both Prompt A and Prompt B.")
+            else:
+                with st.spinner("Running side-by-side comparison..."):
+                    l_ok, l_payload, l_err, _ = api_request(
+                        "POST",
+                        "/generate",
+                        timeout=180,
+                        json={
+                            "topic": left_prompt,
+                            "mode": left_mode,
+                            "include_diagnostics": True,
+                        },
+                    )
+                    r_ok, r_payload, r_err, _ = api_request(
+                        "POST",
+                        "/generate",
+                        timeout=180,
+                        json={
+                            "topic": right_prompt,
+                            "mode": right_mode,
+                            "include_diagnostics": True,
+                        },
+                    )
+                st.session_state.studio_compare_result = {
+                    "left": l_payload if l_ok and isinstance(l_payload, dict) else {"error": l_err},
+                    "right": r_payload if r_ok and isinstance(r_payload, dict) else {"error": r_err},
+                }
+
+        compare_result = st.session_state.studio_compare_result
+        if isinstance(compare_result, dict):
+            c_left, c_right = st.columns(2)
+            left_data = compare_result.get("left") or {}
+            right_data = compare_result.get("right") or {}
+
+            with c_left:
+                st.markdown("### Prompt A")
+                if left_data.get("error"):
+                    st.error(str(left_data.get("error")))
+                else:
+                    left_stats = left_data.get("stats") or {}
+                    metric("Latency ms", int(left_stats.get("latency_ms", 0) or 0))
+                    metric("Citations", int(left_stats.get("citation_count", 0) or 0))
+                    st.markdown(str(left_data.get("review", ""))[:1400])
+
+            with c_right:
+                st.markdown("### Prompt B")
+                if right_data.get("error"):
+                    st.error(str(right_data.get("error")))
+                else:
+                    right_stats = right_data.get("stats") or {}
+                    metric("Latency ms", int(right_stats.get("latency_ms", 0) or 0))
+                    metric("Citations", int(right_stats.get("citation_count", 0) or 0))
+                    st.markdown(str(right_data.get("review", ""))[:1400])
+
+
+# -----------------------------------------------------------------------------
+# Knowledge Base page
+# -----------------------------------------------------------------------------
+elif st.session_state.page_mode == "Knowledge Base":
+    st.markdown('<div class="sf-kicker">Knowledge Base</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+<div class="sf-guide">
+  <strong>Start here for your data</strong>
+  <p>Upload PDFs first. They become the evidence used in Research Chat and RAG Studio.</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    stats_ok, stats_payload, stats_err, stats_code = cached_get(
+        "/admin/stats",
+        timeout=10,
+        use_admin_token=True,
+        ttl_sec=20,
+    )
+    stats = stats_payload if stats_ok and isinstance(stats_payload, dict) else {}
+
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        metric("Documents", int(stats.get("documents", 0) or 0))
+    with m2:
+        metric("Passages", int(stats.get("passages", 0) or 0))
+    with m3:
+        metric("Embeddings", int(stats.get("embeddings", 0) or 0))
+
+    if not stats_ok:
+        tone = "warn" if stats_code in (401, 403) else "danger"
+        st.markdown(badge("Stats unavailable", tone), unsafe_allow_html=True)
+        st.caption(stats_err)
+
+    st.session_state.kb_view = st.radio(
+        "Knowledge Base view",
+        ["Upload documents", "Corpus health"],
+        index=0 if st.session_state.kb_view == "Upload documents" else 1,
+        horizontal=True,
+        key="kb_view_select",
+    )
+
+    if st.session_state.kb_view == "Upload documents":
+        panel("Upload and index documents", "Each upload becomes searchable retrieval evidence.")
+
+        file = st.file_uploader(
+            "Upload PDF",
+            type=["pdf"],
+            help="Text is extracted, chunked, embedded, and indexed.",
+        )
+
+        if file is not None:
+            st.write(f"Name: `{file.name}`")
+            st.write(f"Size: `{file.size / 1024:.1f} KB`")
+
+            if st.button(
+                "Ingest document",
+                type="primary",
+                use_container_width=True,
+                help="Extracts text, chunks it, embeds chunks, and indexes them in Qdrant.",
+            ):
+                with st.spinner("Ingesting document..."):
+                    files = {
+                        "file": (
+                            file.name,
+                            file.getvalue(),
+                            "application/pdf",
+                        )
+                    }
+                    ok, payload, err, _ = api_request(
+                        "POST",
+                        "/upload",
+                        timeout=120,
+                        files=files,
+                    )
+
+                if ok and isinstance(payload, dict):
+                    st.success(
+                        f"Indexed `{payload.get('title', file.name)}` with `{payload.get('chunks', 0)}` chunks."
+                    )
+                    clear_get_cache()
+                    time.sleep(0.4)
                     st.rerun()
                 else:
-                    st.error("❌ Failed to restart migration.")
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+                    st.error(f"Ingestion failed: {err}")
 
-    with col_logs:
-        st.markdown("### Recent activity")
+    else:
+        panel("Corpus health", "Check indexed vectors and paper coverage.")
 
-        try:
-            logs_response = requests.get(
-                f"{BACKEND_URL}/admin/logs", timeout=5
-            )
-            if logs_response.status_code == 200:
-                logs = logs_response.json().get("logs", [])
+        col_ok, col_payload, col_err, col_code = cached_get(
+            "/admin/collection_info",
+            timeout=10,
+            use_admin_token=True,
+            ttl_sec=20,
+        )
+        paper_ok, paper_payload, paper_err, paper_code = cached_get(
+            "/admin/paper_count",
+            timeout=10,
+            use_admin_token=True,
+            ttl_sec=20,
+        )
 
-                if logs:
-                    for log in logs[-10:]:
-                        timestamp = log.get("timestamp", "Unknown")
-                        message = log.get("message", "")
-                        level = log.get("level", "info")
+        if col_ok and isinstance(col_payload, dict):
+            st.write(f"Collection: `{col_payload.get('collection_name', 'N/A')}`")
+            st.write(f"Vectors: `{col_payload.get('total_vectors', 0)}`")
+        else:
+            tone = "warn" if col_code in (401, 403) else "danger"
+            st.markdown(badge("Collection info unavailable", tone), unsafe_allow_html=True)
+            st.caption(col_err)
 
-                        if level == "error":
-                            icon = "❌"
-                            color = "var(--error)"
-                        elif level == "warning":
-                            icon = "⚠️"
-                            color = "var(--warning)"
-                        else:
-                            icon = "ℹ️"
-                            color = "var(--text-secondary)"
+        if paper_ok and isinstance(paper_payload, dict):
+            st.write(f"Unique papers: `{paper_payload.get('unique_papers', 0)}`")
+            st.write(f"Sampled chunks: `{paper_payload.get('total_chunks_sampled', 0)}`")
+        else:
+            tone = "warn" if paper_code in (401, 403) else "danger"
+            st.markdown(badge("Paper count unavailable", tone), unsafe_allow_html=True)
+            st.caption(paper_err)
 
-                        st.markdown(
-                            f"""
-                            <div class="meta-card" style="margin-bottom: 0.5rem;">
-                                <div style="display: flex; align-items: start; gap: 0.5rem;">
-                                    <span style="font-size: 1.2rem;">{icon}</span>
-                                    <div style="flex: 1;">
-                                        <div style="color: {color}; font-size: 0.85rem; font-weight: 500;">
-                                            {message}
-                                        </div>
-                                        <div style="color: var(--text-tertiary); font-size: 0.75rem; margin-top: 0.2rem;">
-                                            {timestamp}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                else:
-                    st.info("No recent activity to display.")
-            else:
-                st.warning("Could not fetch activity logs.")
-        except Exception:
-            st.warning("Activity logs unavailable.")
 
-        st.markdown("### System info")
+# -----------------------------------------------------------------------------
+# Admin page
+# -----------------------------------------------------------------------------
+elif st.session_state.page_mode == "Admin":
+    st.markdown('<div class="sf-kicker">Admin</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+<div class="sf-guide">
+  <strong>Admin is optional</strong>
+  <p>Use this page only for maintenance. Daily usage is Research + Knowledge Base.</p>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
-        try:
-            info_response = requests.get(
-                f"{BACKEND_URL}/admin/system_info", timeout=5
-            )
-            if info_response.status_code == 200:
-                info = info_response.json()
+    st.session_state.admin_view = st.radio(
+        "Admin view",
+        ["Operations", "Logs", "Diagnostics"],
+        index=["Operations", "Logs", "Diagnostics"].index(st.session_state.admin_view)
+        if st.session_state.admin_view in {"Operations", "Logs", "Diagnostics"}
+        else 0,
+        horizontal=True,
+        key="admin_view_select",
+    )
 
-                st.markdown(
-                    f"""
-                    <div class="meta-card">
-                        <div class="meta-label">Backend version</div>
-                        <div class="meta-content">{info.get('version', 'Unknown')}</div>
-                    </div>
-                    <div class="meta-card">
-                        <div class="meta-label">Vector DB</div>
-                        <div class="meta-content">{info.get('vector_db', 'Qdrant')}</div>
-                    </div>
-                    <div class="meta-card">
-                        <div class="meta-label">Embedding model</div>
-                        <div class="meta-content">{info.get('embedding_model', 'Unknown')}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
+    status_ok, status_payload, status_err, status_code = cached_get(
+        "/admin/migration_status",
+        timeout=10,
+        use_admin_token=True,
+        ttl_sec=8,
+    )
+    status = status_payload if status_ok and isinstance(status_payload, dict) else {}
+
+    info_ok = True
+    info_payload: Any = {}
+    info_err = ""
+    info_code = 0
+    if st.session_state.admin_view in {"Operations", "Diagnostics"}:
+        info_ok, info_payload, info_err, info_code = cached_get(
+            "/admin/system_info",
+            timeout=10,
+            use_admin_token=True,
+            ttl_sec=20,
+        )
+    info = info_payload if info_ok and isinstance(info_payload, dict) else {}
+
+    if not status_ok:
+        tone = "warn" if status_code in (401, 403) else "danger"
+        st.markdown(badge("Migration status unavailable", tone), unsafe_allow_html=True)
+        st.caption(status_err)
+
+    if st.session_state.admin_view in {"Operations", "Diagnostics"} and not info_ok:
+        tone = "warn" if info_code in (401, 403) else "danger"
+        st.markdown(badge("System info unavailable", tone), unsafe_allow_html=True)
+        st.caption(info_err)
+
+    ms1, ms2, ms3, ms4 = st.columns(4)
+    with ms1:
+        state = "Running" if status.get("running") else "Finished" if status.get("finished") else "Idle"
+        metric("State", state)
+    with ms2:
+        metric("Migrated", int(status.get("migrated", 0) or 0))
+    with ms3:
+        metric("Errors", int(status.get("errors", 0) or 0))
+    with ms4:
+        metric("Uptime", status.get("uptime", "N/A"))
+
+    if st.session_state.admin_view == "Operations":
+        left, right = st.columns([1.35, 1], gap="large")
+
+        with left:
+            panel("Maintenance", "Operational actions for backend data and jobs.")
+            confirm = st.checkbox("I understand this will permanently remove indexed vectors")
+
+            if st.button(
+                "Clear vector database",
+                type="primary",
+                use_container_width=True,
+                disabled=not confirm,
+                help="Deletes all indexed vectors. This is irreversible.",
+            ):
+                ok, _, err, _ = api_request(
+                    "POST",
+                    "/admin/clear_vector_db",
+                    timeout=40,
+                    use_admin_token=True,
                 )
-        except Exception:
-            st.info("System information unavailable.")
+                if ok:
+                    st.success("Vector database cleared")
+                    clear_get_cache()
+                    time.sleep(0.4)
+                    st.rerun()
+                else:
+                    st.error(f"Clear failed: {err}")
+
+            if st.button(
+                "Restart migration",
+                use_container_width=True,
+                help="Restarts background schema migration on existing points.",
+            ):
+                ok, _, err, _ = api_request(
+                    "POST",
+                    "/admin/restart_migration",
+                    timeout=10,
+                    use_admin_token=True,
+                )
+                if ok:
+                    st.success("Migration restarted")
+                    clear_get_cache()
+                    time.sleep(0.4)
+                    st.rerun()
+                else:
+                    st.error(f"Restart failed: {err}")
+
+        with right:
+            panel("System profile", "Backend runtime profile")
+            if info:
+                st.write(f"Version: `{info.get('version', 'N/A')}`")
+                st.write(f"Vector DB: `{info.get('vector_db', 'N/A')}`")
+                st.write(f"Embedding model: `{info.get('embedding_model', 'N/A')}`")
+                st.write(f"Collection: `{info.get('collection', 'N/A')}`")
+                st.write(f"Migration ready: `{info.get('migration_ready', False)}`")
+
+    elif st.session_state.admin_view == "Logs":
+        panel("Activity logs", "Recent migration and maintenance activity")
+        logs_ok, logs_payload, logs_err, logs_code = cached_get(
+            "/admin/logs",
+            timeout=10,
+            use_admin_token=True,
+            ttl_sec=8,
+        )
+
+        if not logs_ok:
+            tone = "warn" if logs_code in (401, 403) else "danger"
+            st.markdown(badge("Logs unavailable", tone), unsafe_allow_html=True)
+            st.caption(logs_err)
+        else:
+            rows = logs_payload.get("logs", []) if isinstance(logs_payload, dict) else []
+            if rows:
+                level = st.selectbox("Filter level", ["all", "info", "warning", "error"], index=0)
+                if level != "all":
+                    rows = [r for r in rows if str(r.get("level", "")).lower() == level]
+
+                if rows:
+                    st.dataframe(rows[-60:], use_container_width=True)
+                else:
+                    st.caption("No logs for selected level")
+            else:
+                st.caption("No activity logs available")
+
+    else:
+        panel("Diagnostics", "Raw endpoint payloads")
+
+        h_ok, h_payload, h_err, _ = cached_get("/health", timeout=8, ttl_sec=8)
+        if h_ok:
+            hs = str(h_payload.get("status", "unknown")).lower() if isinstance(h_payload, dict) else "unknown"
+            st.markdown(badge(f"Service status: {hs}", "ok" if hs == "ok" else "warn"), unsafe_allow_html=True)
+            st.json(h_payload)
+        else:
+            st.markdown(badge("Status endpoint unavailable", "danger"), unsafe_allow_html=True)
+            st.caption(h_err)
+
+        st.markdown("##### System info")
+        st.json(info)
+
+        st.markdown("##### Migration status")
+        st.json(status)

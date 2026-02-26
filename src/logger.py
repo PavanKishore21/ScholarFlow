@@ -9,6 +9,7 @@ def get_logger(name="graphscholar"):
         return logger
 
     logger.setLevel(logging.INFO)
+    logger.propagate = False
 
     handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter(

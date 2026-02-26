@@ -3,6 +3,7 @@ uvicorn
 streamlit
 python-dotenv
 pydantic-settings
+python-multipart
 
 neo4j
 qdrant-client
@@ -14,5 +15,4 @@ langchain-text-splitters
 
 pypdf
 pyvis
-networkx
 arxiv
